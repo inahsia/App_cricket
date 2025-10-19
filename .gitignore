@@ -1,0 +1,65 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.yarn-integrity
+.expo/
+.expo-shared/
+
+# React Native Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/app/build/
+android/build/
+*.keystore
+*.jks
+
+# React Native iOS
+ios/Pods/
+ios/DerivedData/
+ios/build/
+*.xcworkspace
+*.xcuserdata/
+*.xcuserstate
+
+# Metro / Bundler
+.expo
+dist/
+build/
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Env
+.env
+.env.*
+
+# Logs
+logs/
+*.log
+
+# Python
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/.pytest_cache/
+
+# Django
+backend/db.sqlite3
+backend/staticfiles/
+backend/media/
+
+# Misc
+.tmp/
+.temp/
+.idea/
+.sourcemaps/

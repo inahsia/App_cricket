@@ -1,0 +1,127 @@
+import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import Colors from '../config/colors';
+
+// Auth Screens
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+
+// User Screens
+import UserHomeScreen from '../screens/user/UserHomeScreen';
+import SportsListScreen from '../screens/user/SportsListScreen';
+import SlotsListScreen from '../screens/user/SlotsListScreen';
+import BookingScreen from '../screens/user/BookingScreen';
+import MyBookingsScreen from '../screens/user/MyBookingsScreen';
+import PaymentScreen from '../screens/user/PaymentScreen';
+
+// Player Screens
+import PlayerDashboardScreen from '../screens/player/PlayerDashboardScreen';
+import PlayerQRScreen from '../screens/player/PlayerQRScreen';
+
+// Admin Screens
+import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
+import ManageSportsScreen from '../screens/admin/ManageSportsScreen';
+import ManageSlotsScreen from '../screens/admin/ManageSlotsScreen';
+import QRScannerScreen from '../screens/admin/QRScannerScreen';
+import AllBookingsScreen from '../screens/admin/AllBookingsScreen';
+
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+// User Tab Navigator
+const UserTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.text.secondary,
+        headerStyle: {backgroundColor: Colors.primary},
+        headerTintColor: Colors.text.light,
+      }}>
+      <Tab.Screen name="Home" component={UserHomeScreen} />
+      <Tab.Screen name="Sports" component={SportsListScreen} />
+      <Tab.Screen name="My Bookings" component={MyBookingsScreen} />
+    </Tab.Navigator>
+  );
+};
+
+// Player Tab Navigator
+const PlayerTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.text.secondary,
+        headerStyle: {backgroundColor: Colors.primary},
+        headerTintColor: Colors.text.light,
+      }}>
+      <Tab.Screen name="Dashboard" component={PlayerDashboardScreen} />
+      <Tab.Screen name="My QR Code" component={PlayerQRScreen} />
+    </Tab.Navigator>
+  );
+};
+
+// Admin Tab Navigator
+const AdminTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.text.secondary,
+        headerStyle: {backgroundColor: Colors.primary},
+        headerTintColor: Colors.text.light,
+      }}>
+      <Tab.Screen name="Dashboard" component={AdminDashboardScreen} />
+      <Tab.Screen name="Sports" component={ManageSportsScreen} />
+      <Tab.Screen name="Slots" component={ManageSlotsScreen} />
+      <Tab.Screen name="Bookings" component={AllBookingsScreen} />
+      <Tab.Screen name="Scanner" component={QRScannerScreen} />
+    </Tab.Navigator>
+  );
+};
+
+const Navigation = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: {backgroundColor: Colors.primary},
+          headerTintColor: Colors.text.light,
+          headerTitleStyle: {fontWeight: '700'},
+        }}>
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{headerShown: false}}
+        />
+        <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{title: 'Create Account'}}
+        />
+        <Stack.Screen
+          name="UserTab"
+          component={UserTabNavigator}
+          options={{headerShown: false}}
+        />
+        <Stack.Screen
+          name="PlayerTab"
+          component={PlayerTabNavigator}
+          options={{headerShown: false}}
+        />
+        <Stack.Screen
+          name="AdminTab"
+          component={AdminTabNavigator}
+          options={{headerShown: false}}
+        />
+        <Stack.Screen name="Slots" component={SlotsListScreen} />
+        <Stack.Screen name="Booking" component={BookingScreen} />
+        <Stack.Screen name="Payment" component={PaymentScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+export default Navigation;

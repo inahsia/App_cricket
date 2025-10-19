@@ -1,0 +1,187 @@
+"""
+Serializers for Red Ball Cricket Academy API
+"""
+from rest_framework import serializers
+from django.contrib.auth.models import User
+from .models import Sport, Slot, Booking, Player, CheckInLog
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for User model"""
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+        read_only_fields = ['id']
+
+
+class SportSerializer(serializers.ModelSerializer):
+    """Serializer for Sport model"""
+    available_slots_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Sport
+        fields = ['id', 'name', 'price_per_hour', 'description', 'is_active', 
+                  'created_at', 'updated_at', 'available_slots_count']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_available_slots_count(self, obj):
+        return obj.slots.filter(is_booked=False).count()
+
+
+class SlotSerializer(serializers.ModelSerializer):
+    """Serializer for Slot model"""
+    sport_name = serializers.CharField(source='sport.name', read_only=True)
+    sport_details = SportSerializer(source='sport', read_only=True)
+    is_available = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Slot
+        fields = ['id', 'sport', 'sport_name', 'sport_details', 'date', 
+                  'start_time', 'end_time', 'price', 'is_booked', 'max_players',
+                  'is_available', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_is_available(self, obj):
+        return obj.is_available()
+
+    def validate(self, data):
+        """Validate that end_time is after start_time"""
+        if data.get('start_time') and data.get('end_time'):
+            if data['start_time'] >= data['end_time']:
+                raise serializers.ValidationError(
+                    "End time must be after start time"
+                )
+        return data
+
+
+class PlayerSerializer(serializers.ModelSerializer):
+    """Serializer for Player model"""
+    booking_details = serializers.SerializerMethodField()
+    status = serializers.CharField(source='get_status', read_only=True)
+    qr_code_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Player
+        fields = ['id', 'booking', 'name', 'email', 'phone', 'qr_code', 
+                  'qr_code_url', 'check_in_count', 'status', 'last_check_in', 
+                  'last_check_out', 'booking_details', 'created_at']
+        read_only_fields = ['id', 'qr_code', 'check_in_count', 'last_check_in', 
+                           'last_check_out', 'created_at']
+
+    def get_booking_details(self, obj):
+        return {
+            'id': obj.booking.id,
+            'slot_date': obj.booking.slot.date,
+            'sport': obj.booking.slot.sport.name,
+            'start_time': obj.booking.slot.start_time,
+            'end_time': obj.booking.slot.end_time,
+        }
+
+    def get_qr_code_url(self, obj):
+        if obj.qr_code:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.qr_code.url)
+        return None
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    """Serializer for Booking model"""
+    user_details = UserSerializer(source='user', read_only=True)
+    slot_details = SlotSerializer(source='slot', read_only=True)
+    players = PlayerSerializer(many=True, read_only=True)
+    player_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Booking
+        fields = ['id', 'user', 'user_details', 'slot', 'slot_details', 
+                  'players', 'player_count', 'created_at', 'updated_at', 
+                  'payment_verified', 'payment_id', 'order_id', 'amount_paid',
+                  'is_cancelled', 'cancellation_reason']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'payment_verified']
+
+    def get_player_count(self, obj):
+        return obj.players.count()
+
+    def validate_slot(self, value):
+        """Validate that slot is available for booking"""
+        if value.is_booked:
+            raise serializers.ValidationError("This slot is already booked")
+        if not value.is_available():
+            raise serializers.ValidationError("This slot is not available")
+        return value
+
+    def create(self, validated_data):
+        """Create booking and mark slot as booked"""
+        booking = super().create(validated_data)
+        slot = booking.slot
+        slot.is_booked = True
+        slot.save()
+        return booking
+
+
+class BookingCreateSerializer(serializers.ModelSerializer):
+    """Simplified serializer for creating bookings"""
+    class Meta:
+        model = Booking
+        fields = ['slot']
+
+    def validate_slot(self, value):
+        """Validate that slot is available for booking"""
+        if value.is_booked:
+            raise serializers.ValidationError("This slot is already booked")
+        if not value.is_available():
+            raise serializers.ValidationError("This slot is not available")
+        return value
+
+
+class PlayerCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating players"""
+    class Meta:
+        model = Player
+        fields = ['booking', 'name', 'email', 'phone']
+
+    def validate_email(self, value):
+        """Validate email format"""
+        return value.lower()
+
+
+class CheckInLogSerializer(serializers.ModelSerializer):
+    """Serializer for CheckInLog model"""
+    player_name = serializers.CharField(source='player.name', read_only=True)
+    player_email = serializers.CharField(source='player.email', read_only=True)
+
+    class Meta:
+        model = CheckInLog
+        fields = ['id', 'player', 'player_name', 'player_email', 'action', 
+                  'timestamp', 'location']
+        read_only_fields = ['id', 'timestamp']
+
+
+class QRCodeScanSerializer(serializers.Serializer):
+    """Serializer for QR code scanning"""
+    qr_data = serializers.JSONField()
+
+    def validate_qr_data(self, value):
+        """Validate QR code data"""
+        required_fields = ['player_id', 'booking_id', 'date']
+        for field in required_fields:
+            if field not in value:
+                raise serializers.ValidationError(
+                    f"QR code data must contain '{field}'"
+                )
+        return value
+
+
+class PaymentOrderSerializer(serializers.Serializer):
+    """Serializer for creating Razorpay order"""
+    booking_id = serializers.IntegerField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+class PaymentVerificationSerializer(serializers.Serializer):
+    """Serializer for verifying Razorpay payment"""
+    razorpay_order_id = serializers.CharField()
+    razorpay_payment_id = serializers.CharField()
+    razorpay_signature = serializers.CharField()
+    booking_id = serializers.IntegerField()
