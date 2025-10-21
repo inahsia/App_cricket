@@ -7,7 +7,7 @@ from . import views
 
 router = DefaultRouter()
 router.register(r'sports', views.SportViewSet, basename='sport')
-router.register(r'slots', views.SlotViewSet, basename='slot')
+router.register(r'slots', views.SlotViewSet, basename='timeslot')
 router.register(r'bookings', views.BookingViewSet, basename='booking')
 router.register(r'players', views.PlayerViewSet, basename='player')
 

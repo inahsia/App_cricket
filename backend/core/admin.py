@@ -2,7 +2,7 @@
 Admin configuration for Red Ball Cricket Academy
 """
 from django.contrib import admin
-from .models import Sport, Slot, Booking, Player, CheckInLog
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog
 
 
 @admin.register(Sport)
@@ -13,8 +13,8 @@ class SportAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
 
 
-@admin.register(Slot)
-class SlotAdmin(admin.ModelAdmin):
+@admin.register(TimeSlot)
+class TimeSlotAdmin(admin.ModelAdmin):
     list_display = ['sport', 'date', 'start_time', 'end_time', 'price', 'is_booked', 'max_players']
     list_filter = ['sport', 'is_booked', 'date']
     search_fields = ['sport__name']

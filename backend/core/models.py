@@ -43,6 +43,8 @@ class Sport(models.Model):
         validators=[MinValueValidator(0)]
     )
     description = models.TextField(blank=True, null=True)
+    duration = models.IntegerField(default=60, validators=[MinValueValidator(1)], help_text="Duration in minutes")
+    max_players = models.IntegerField(default=10, validators=[MinValueValidator(1)], help_text="Maximum number of players")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -56,7 +58,7 @@ class Sport(models.Model):
         return f"{self.name} - ₹{self.price_per_hour}/hour"
 
 
-class Slot(models.Model):
+class TimeSlot(models.Model):
     """Time slots for booking"""
     sport = models.ForeignKey(
         Sport, 
@@ -79,8 +81,8 @@ class Slot(models.Model):
     class Meta:
         ordering = ['date', 'start_time']
         unique_together = ['sport', 'date', 'start_time']
-        verbose_name = 'Slot'
-        verbose_name_plural = 'Slots'
+        verbose_name = 'Time Slot'
+        verbose_name_plural = 'Time Slots'
 
     def __str__(self):
         return f"{self.sport.name} - {self.date} ({self.start_time} - {self.end_time})"
@@ -98,7 +100,7 @@ class Booking(models.Model):
         related_name='bookings'
     )
     slot = models.OneToOneField(
-        Slot, 
+        TimeSlot, 
         on_delete=models.CASCADE, 
         related_name='booking'
     )

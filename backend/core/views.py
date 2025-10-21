@@ -19,9 +19,9 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 
-from .models import Sport, Slot, Booking, Player, CheckInLog, UserProfile
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile
 from .serializers import (
-    SportSerializer, SlotSerializer, BookingSerializer, 
+    SportSerializer, TimeSlotSerializer, BookingSerializer, 
     PlayerSerializer, CheckInLogSerializer, UserSerializer,
     BookingCreateSerializer, PlayerCreateSerializer,
     QRCodeScanSerializer, PaymentOrderSerializer, PaymentVerificationSerializer
@@ -111,16 +111,15 @@ class SportViewSet(viewsets.ModelViewSet):
             is_booked=False,
             date__gte=today
         ).order_by('date', 'start_time')
-        
-        serializer = SlotSerializer(slots, many=True, context={'request': request})
+        serializer = TimeSlotSerializer(slots, many=True, context={'request': request})
         return Response(serializer.data)
 
 
 class SlotViewSet(viewsets.ModelViewSet):
     """ViewSet for Slot CRUD operations"""
-    queryset = Slot.objects.all()
-    serializer_class = SlotSerializer
-    
+    queryset = TimeSlot.objects.all()
+    serializer_class = TimeSlotSerializer
+
     def get_permissions(self):
         """Admin can create/update/delete, others can only view"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
@@ -129,24 +128,24 @@ class SlotViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter slots based on query parameters"""
-        queryset = Slot.objects.all()
-        
+        queryset = TimeSlot.objects.all()
+
         # Filter by sport
         sport_id = self.request.query_params.get('sport', None)
         if sport_id:
             queryset = queryset.filter(sport_id=sport_id)
-        
+
         # Filter by date
         date = self.request.query_params.get('date', None)
         if date:
             queryset = queryset.filter(date=date)
-        
+
         # Filter by availability
         available = self.request.query_params.get('available', None)
         if available and available.lower() == 'true':
             today = timezone.now().date()
             queryset = queryset.filter(is_booked=False, date__gte=today)
-        
+
         return queryset.order_by('date', 'start_time')
 
     @action(detail=False, methods=['post'])
@@ -157,8 +156,8 @@ class SlotViewSet(viewsets.ModelViewSet):
                 {'error': 'Admin access required'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
-        serializer = SlotSerializer(data=request.data, many=True)
+
+        serializer = TimeSlotSerializer(data=request.data, many=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -397,7 +396,7 @@ def dashboard_stats(request):
         'checked_in_today': Player.objects.filter(
             last_check_in__date=today
         ).count(),
-        'available_slots': Slot.objects.filter(
+        'available_slots': TimeSlot.objects.filter(
             is_booked=False,
             date__gte=today
         ).count()

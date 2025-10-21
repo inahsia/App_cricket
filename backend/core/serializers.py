@@ -3,7 +3,7 @@ Serializers for Red Ball Cricket Academy API
 """
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Sport, Slot, Booking, Player, CheckInLog
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -20,7 +20,7 @@ class SportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Sport
-        fields = ['id', 'name', 'price_per_hour', 'description', 'is_active', 
+        fields = ['id', 'name', 'price_per_hour', 'description', 'duration', 'max_players', 'is_active', 
                   'created_at', 'updated_at', 'available_slots_count']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -28,14 +28,14 @@ class SportSerializer(serializers.ModelSerializer):
         return obj.slots.filter(is_booked=False).count()
 
 
-class SlotSerializer(serializers.ModelSerializer):
-    """Serializer for Slot model"""
+class TimeSlotSerializer(serializers.ModelSerializer):
+    """Serializer for TimeSlot model"""
     sport_name = serializers.CharField(source='sport.name', read_only=True)
     sport_details = SportSerializer(source='sport', read_only=True)
     is_available = serializers.SerializerMethodField()
 
     class Meta:
-        model = Slot
+        model = TimeSlot
         fields = ['id', 'sport', 'sport_name', 'sport_details', 'date', 
                   'start_time', 'end_time', 'price', 'is_booked', 'max_players',
                   'is_available', 'created_at', 'updated_at']
@@ -88,7 +88,7 @@ class PlayerSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     """Serializer for Booking model"""
     user_details = UserSerializer(source='user', read_only=True)
-    slot_details = SlotSerializer(source='slot', read_only=True)
+    slot_details = TimeSlotSerializer(source='slot', read_only=True)
     players = PlayerSerializer(many=True, read_only=True)
     player_count = serializers.SerializerMethodField()
 

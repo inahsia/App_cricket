@@ -25,6 +25,7 @@ const ManageSportsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingSport, setEditingSport] = useState<Sport | null>(null);
 
   // form state
   const [name, setName] = useState('');
@@ -56,6 +57,7 @@ const ManageSportsScreen = () => {
   };
 
   const openCreateModal = () => {
+    setEditingSport(null);
     setName('');
     setDescription('');
     setPricePerHour('');
@@ -64,7 +66,17 @@ const ManageSportsScreen = () => {
     setModalVisible(true);
   };
 
-  const handleCreate = async () => {
+  const openEditModal = (sport: Sport) => {
+    setEditingSport(sport);
+    setName(sport.name || '');
+    setDescription(sport.description || '');
+    setPricePerHour(sport.price_per_hour?.toString() || '');
+    setDurationMinutes(sport.duration?.toString() || '60');
+    setMaxPlayers(sport.max_players?.toString() || '10');
+    setModalVisible(true);
+  };
+
+  const handleCreateOrUpdate = async () => {
     if (!name.trim()) {
       Alert.alert('Validation', 'Please enter sport name');
       return;
@@ -74,16 +86,26 @@ const ManageSportsScreen = () => {
       name: name.trim(),
       description: description.trim(),
       price_per_hour: pricePerHour || '0',
+      duration: parseInt(durationMinutes, 10),
+      max_players: parseInt(maxPlayers, 10),
       is_active: true,
     };
 
     try {
       setCreating(true);
-      const created = await SportsService.createSport(payload);
-      setSports(prev => [created, ...prev]);
+      if (editingSport) {
+        const updated = await SportsService.updateSport(editingSport.id, payload);
+        setSports(prev => prev.map(s => s.id === updated.id ? updated : s));
+        Alert.alert('Success', 'Sport updated successfully');
+      } else {
+        const created = await SportsService.createSport(payload);
+        setSports(prev => [created, ...prev]);
+        Alert.alert('Success', 'Sport created successfully');
+      }
       setModalVisible(false);
+      setEditingSport(null);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create sport');
+      Alert.alert('Error', editingSport ? 'Failed to update sport' : 'Failed to create sport');
     } finally {
       setCreating(false);
     }
@@ -113,7 +135,7 @@ const ManageSportsScreen = () => {
       <View style={styles.row}>
         <Text style={styles.price}>{`₹ ${item.price_per_hour}/hour`}</Text>
         <View style={styles.actions}>
-          <Button title="Edit" onPress={() => Alert.alert('Edit', 'Edit not implemented')} size="small" variant="outline" style={{marginRight: 8}} />
+          <Button title="Edit" onPress={() => openEditModal(item)} size="small" variant="outline" style={{marginRight: 8}} />
           <Button title="Delete" onPress={() => handleDelete(item)} size="small" variant="danger" />
         </View>
       </View>
@@ -154,7 +176,7 @@ const ManageSportsScreen = () => {
       <Modal visible={modalVisible} animationType="slide" transparent={true} onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Create Sport</Text>
+            <Text style={styles.modalTitle}>{editingSport ? 'Edit Sport' : 'Create Sport'}</Text>
             <InputField label="Name" value={name} onChangeText={setName} placeholder="e.g. Cricket" />
             <InputField label="Description" value={description} onChangeText={setDescription} placeholder="Short description" />
             <InputField label="Price per hour" value={pricePerHour} onChangeText={setPricePerHour} placeholder="0" keyboardType="numeric" />
@@ -162,8 +184,8 @@ const ManageSportsScreen = () => {
             <InputField label="Max players" value={maxPlayers} onChangeText={setMaxPlayers} placeholder="10" keyboardType="numeric" />
 
             <View style={styles.modalActions}>
-              <Button title="Cancel" onPress={() => setModalVisible(false)} variant="outline" />
-              <Button title="Create" onPress={handleCreate} loading={creating} />
+              <Button title="Cancel" onPress={() => { setModalVisible(false); setEditingSport(null); }} variant="outline" />
+              <Button title={editingSport ? 'Update' : 'Create'} onPress={handleCreateOrUpdate} loading={creating} />
             </View>
           </View>
         </KeyboardAvoidingView>

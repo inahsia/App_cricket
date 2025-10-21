@@ -29,11 +29,15 @@ const ManageSlotsScreen = () => {
 
   // Form states
   const [selectedSport, setSelectedSport] = useState<number | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [endTime, setEndTime] = useState<Date | null>(null);
   const [price, setPrice] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('');
+  // Picker visibility states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -82,8 +86,8 @@ const ManageSlotsScreen = () => {
   };
 
   const handleCreateOrUpdateSlot = async () => {
-    if (!selectedSport || !price || !maxPlayers) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!selectedSport || !selectedDate || !price || !maxPlayers || !startTime || !endTime) {
+      Alert.alert('Error', 'Please fill in all required fields including date and times');
       return;
     }
 
@@ -161,9 +165,9 @@ const ManageSlotsScreen = () => {
 
   const resetForm = () => {
     setSelectedSport(null);
-    setSelectedDate(new Date());
-    setStartTime(new Date());
-    setEndTime(new Date());
+    setSelectedDate(null);
+    setStartTime(null);
+    setEndTime(null);
     setPrice('');
     setMaxPlayers('');
   };
@@ -274,45 +278,63 @@ const ManageSlotsScreen = () => {
 
           <View style={styles.formField}>
             <Text style={styles.formLabel}>Date</Text>
-            <View style={styles.pickerContainer}>
+            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.pickerContainer}>
+              <Text style={selectedDate ? styles.pickerText : styles.placeholderText}>
+                {selectedDate ? selectedDate.toLocaleDateString() : 'Select date'}
+              </Text>
+            </TouchableOpacity>
+            {showDatePicker && (
               <DateTimePicker
-                value={selectedDate}
+                value={selectedDate || new Date()}
                 mode="date"
                 display="default"
-                onChange={(event, date) => {
-                  if (date) setSelectedDate(date);
-                }}
                 minimumDate={new Date()}
+                onChange={(event, date) => {
+                  setShowDatePicker(false);
+                  if (event.type === 'set' && date) setSelectedDate(date);
+                }}
               />
-            </View>
+            )}
           </View>
 
           <View style={styles.formField}>
             <Text style={styles.formLabel}>Start Time</Text>
-            <View style={styles.pickerContainer}>
+            <TouchableOpacity onPress={() => setShowStartTimePicker(true)} style={styles.pickerContainer}>
+              <Text style={startTime ? styles.pickerText : styles.placeholderText}>
+                {startTime ? startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Select start time'}
+              </Text>
+            </TouchableOpacity>
+            {showStartTimePicker && (
               <DateTimePicker
-                value={startTime}
+                value={startTime || new Date()}
                 mode="time"
                 display="default"
                 onChange={(event, time) => {
-                  if (time) setStartTime(time);
+                  setShowStartTimePicker(false);
+                  if (event.type === 'set' && time) setStartTime(time);
                 }}
               />
-            </View>
+            )}
           </View>
 
           <View style={styles.formField}>
             <Text style={styles.formLabel}>End Time</Text>
-            <View style={styles.pickerContainer}>
+            <TouchableOpacity onPress={() => setShowEndTimePicker(true)} style={styles.pickerContainer}>
+              <Text style={endTime ? styles.pickerText : styles.placeholderText}>
+                {endTime ? endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Select end time'}
+              </Text>
+            </TouchableOpacity>
+            {showEndTimePicker && (
               <DateTimePicker
                 value={endTime}
                 mode="time"
                 display="default"
                 onChange={(event, time) => {
-                  if (time) setEndTime(time);
+                  setShowEndTimePicker(false);
+                  if (event.type === 'set' && time) setEndTime(time);
                 }}
               />
-            </View>
+            )}
           </View>
 
           <View style={styles.formField}>
@@ -505,6 +527,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text.secondary,
     textAlign: 'center',
+  },
+  pickerText: {
+    fontSize: 16,
+    color: Colors.text.primary,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    fontStyle: 'italic',
   },
 });
 
