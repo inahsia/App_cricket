@@ -40,9 +40,10 @@ const ManageSportsScreen = () => {
   const fetchSports = async () => {
     try {
       const data = await SportsService.getAllSports();
-      setSports(data);
+      setSports(Array.isArray(data) ? data : []);
     } catch (error) {
       Alert.alert('Error', 'Failed to load sports');
+      setSports([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -135,19 +136,20 @@ const ManageSportsScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {sports.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No sports found</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={sports || []}
-          renderItem={renderSport}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
-      )}
+      <FlatList
+        data={sports || []}
+        renderItem={renderSport}
+        keyExtractor={item => item.id.toString()}
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No sports found</Text>
+            </View>
+          ) : null
+        }
+      />
 
       <Modal visible={modalVisible} animationType="slide" transparent={true} onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>

@@ -46,12 +46,12 @@ export const API_ENDPOINTS = {
   // Dashboard
   DASHBOARD_STATS: '/dashboard/stats/',
 
-  // Admin Endpoints
-  ADMIN_BOOKINGS: '/admin/bookings/',
-  ADMIN_SPORTS: '/admin/sports/',
-  ADMIN_SLOTS: '/admin/slots/',
-  ADMIN_SLOTS_BULK_CREATE: '/admin/slots/bulk_create/',
-  ADMIN_USERS: '/admin/users/',
+  // Admin Endpoints (use same endpoints as regular users, backend handles permissions)
+  ADMIN_BOOKINGS: '/bookings/',
+  ADMIN_SPORTS: '/sports/',
+  ADMIN_SLOTS: '/slots/',
+  ADMIN_SLOTS_BULK_CREATE: '/slots/bulk_create/',
+  ADMIN_USERS: '/users/',
 };
 
 export default {

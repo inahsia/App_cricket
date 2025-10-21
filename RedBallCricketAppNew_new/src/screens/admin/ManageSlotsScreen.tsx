@@ -25,9 +25,10 @@ const ManageSlotsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
 
   // Form states
-  const [selectedSport, setSelectedSport] = useState(null);
+  const [selectedSport, setSelectedSport] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
@@ -45,17 +46,42 @@ const ManageSlotsScreen = () => {
         AdminService.getAllSlots(),
         AdminService.getAllSports(),
       ]);
-      setSlots(slotsResponse);
-      setSports(sportsResponse);
+      setSlots(Array.isArray(slotsResponse) ? slotsResponse : []);
+      setSports(Array.isArray(sportsResponse) ? sportsResponse : []);
     } catch (error) {
       Alert.alert('Error', 'Failed to load data');
+      setSlots([]);
+      setSports([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleCreateSlot = async () => {
+  const openCreateModal = () => {
+    setEditingSlot(null);
+    resetForm();
+    setShowAddForm(true);
+  };
+
+  const openEditModal = (slot: Slot) => {
+    setEditingSlot(slot);
+    setSelectedSport(slot.sport);
+    setSelectedDate(new Date(slot.date));
+    const [startHour, startMin] = slot.start_time.split(':');
+    const [endHour, endMin] = slot.end_time.split(':');
+    const startDate = new Date();
+    startDate.setHours(parseInt(startHour, 10), parseInt(startMin, 10));
+    const endDate = new Date();
+    endDate.setHours(parseInt(endHour, 10), parseInt(endMin, 10));
+    setStartTime(startDate);
+    setEndTime(endDate);
+    setPrice(slot.price.toString());
+    setMaxPlayers(slot.max_players.toString());
+    setShowAddForm(true);
+  };
+
+  const handleCreateOrUpdateSlot = async () => {
     if (!selectedSport || !price || !maxPlayers) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -69,23 +95,44 @@ const ManageSlotsScreen = () => {
           hour12: false,
           hour: '2-digit',
           minute: '2-digit',
+          second: '2-digit',
         }),
         end_time: endTime.toLocaleTimeString('en-US', {
           hour12: false,
           hour: '2-digit',
           minute: '2-digit',
+          second: '2-digit',
         }),
-        price: parseFloat(price),
+        price: price,
         max_players: parseInt(maxPlayers, 10),
       };
 
-      await AdminService.createSlot(slotData);
-      Alert.alert('Success', 'Slot created successfully');
+      console.log(editingSlot ? 'Updating slot' : 'Creating slot', 'with data:', slotData);
+      
+      if (editingSlot) {
+        // Update existing slot
+        const result = await AdminService.updateSlot(editingSlot.id, slotData);
+        console.log('Slot updated:', result);
+        Alert.alert('Success', 'Slot updated successfully');
+        setSlots(prev => prev.map(s => s.id === editingSlot.id ? result : s));
+      } else {
+        // Create new slot
+        const result = await AdminService.createSlot(slotData);
+        console.log('Slot created:', result);
+        Alert.alert('Success', 'Slot created successfully');
+        setSlots(prev => [result, ...prev]);
+      }
+      
       setShowAddForm(false);
-      loadData();
       resetForm();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create slot');
+    } catch (error: any) {
+      console.error('Slot creation/update error:', error);
+      console.error('Error response:', error.response?.data);
+      const errorMessage = error.response?.data?.error 
+        || error.response?.data?.detail 
+        || error.message 
+        || `Failed to ${editingSlot ? 'update' : 'create'} slot`;
+      Alert.alert('Error', errorMessage);
     }
   };
 
@@ -124,17 +171,24 @@ const ManageSlotsScreen = () => {
   const renderSlot = (slot: Slot) => (
     <Card key={slot.id} style={styles.slotCard}>
       <View style={styles.slotHeader}>
-        <View>
+        <View style={{flex: 1}}>
           <Text style={styles.sportName}>{slot.sport_name}</Text>
           <Text style={styles.dateTime}>
             {formatDate(slot.date)} • {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDeleteSlot(slot.id)}>
-          <Icon name="trash" size={20} color={Colors.error} />
-        </TouchableOpacity>
+        <View style={styles.slotActions}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => openEditModal(slot)}>
+            <Icon name="edit" size={18} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteSlot(slot.id)}>
+            <Icon name="trash" size={18} color={Colors.error} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.slotDetails}>
@@ -174,7 +228,14 @@ const ManageSlotsScreen = () => {
       }>
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => setShowAddForm(!showAddForm)}>
+        onPress={() => {
+          if (showAddForm) {
+            setShowAddForm(false);
+            setEditingSlot(null);
+          } else {
+            openCreateModal();
+          }
+        }}>
         <Text style={styles.addButtonText}>
           {showAddForm ? 'Cancel' : '+ Add New Slot'}
         </Text>
@@ -182,13 +243,15 @@ const ManageSlotsScreen = () => {
 
       {showAddForm && (
         <Card style={styles.formCard}>
-          <Text style={styles.formTitle}>Create New Slot</Text>
+          <Text style={styles.formTitle}>
+            {editingSlot ? 'Edit Slot' : 'Create New Slot'}
+          </Text>
 
           <View style={styles.formField}>
             <Text style={styles.formLabel}>Select Sport</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.sportSelector}>
-                {sports.map((sport) => (
+                {(sports || []).map((sport) => (
                   <TouchableOpacity
                     key={sport.id}
                     style={[
@@ -211,33 +274,45 @@ const ManageSlotsScreen = () => {
 
           <View style={styles.formField}>
             <Text style={styles.formLabel}>Date</Text>
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display="default"
-              onChange={(event, date) => setSelectedDate(date || selectedDate)}
-              minimumDate={new Date()}
-            />
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="default"
+                onChange={(event, date) => {
+                  if (date) setSelectedDate(date);
+                }}
+                minimumDate={new Date()}
+              />
+            </View>
           </View>
 
           <View style={styles.formField}>
             <Text style={styles.formLabel}>Start Time</Text>
-            <DateTimePicker
-              value={startTime}
-              mode="time"
-              display="default"
-              onChange={(event, time) => setStartTime(time || startTime)}
-            />
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={startTime}
+                mode="time"
+                display="default"
+                onChange={(event, time) => {
+                  if (time) setStartTime(time);
+                }}
+              />
+            </View>
           </View>
 
           <View style={styles.formField}>
             <Text style={styles.formLabel}>End Time</Text>
-            <DateTimePicker
-              value={endTime}
-              mode="time"
-              display="default"
-              onChange={(event, time) => setEndTime(time || endTime)}
-            />
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={endTime}
+                mode="time"
+                display="default"
+                onChange={(event, time) => {
+                  if (time) setEndTime(time);
+                }}
+              />
+            </View>
           </View>
 
           <View style={styles.formField}>
@@ -261,15 +336,21 @@ const ManageSlotsScreen = () => {
           </View>
 
           <Button
-            title="Create Slot"
-            onPress={handleCreateSlot}
+            title={editingSlot ? 'Update Slot' : 'Create Slot'}
+            onPress={handleCreateOrUpdateSlot}
             style={styles.createButton}
           />
         </Card>
       )}
 
       <View style={styles.slotsList}>
-        {slots.map(renderSlot)}
+        {slots && slots.length > 0 ? (
+          slots.map(renderSlot)
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No slots available. Create one to get started!</Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -311,6 +392,9 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     marginBottom: 8,
   },
+  pickerContainer: {
+    alignItems: 'flex-start',
+  },
   sportSelector: {
     flexDirection: 'row',
     gap: 8,
@@ -333,6 +417,20 @@ const styles = StyleSheet.create({
   },
   selectedSportText: {
     color: Colors.text.light,
+  },
+  dateTimeButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dateTimeButtonText: {
+    fontSize: 16,
+    color: Colors.text.primary,
   },
   createButton: {
     marginTop: 8,
@@ -359,6 +457,13 @@ const styles = StyleSheet.create({
   dateTime: {
     fontSize: 14,
     color: Colors.text.secondary,
+  },
+  slotActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    padding: 8,
   },
   deleteButton: {
     padding: 8,
@@ -389,6 +494,17 @@ const styles = StyleSheet.create({
     color: Colors.text.light,
     fontSize: 12,
     fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
   },
 });
 

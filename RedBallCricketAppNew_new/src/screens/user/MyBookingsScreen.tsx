@@ -27,9 +27,10 @@ const MyBookingsScreen = () => {
     try {
       setLoading(true);
       const data = await BookingsService.getMyBookings();
-      setBookings(data);
+      setBookings(Array.isArray(data) ? data : []);
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load bookings');
+      setBookings([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -156,7 +157,7 @@ const MyBookingsScreen = () => {
 
   return (
     <FlatList
-      data={bookings}
+      data={bookings || []}
       renderItem={renderBooking}
       keyExtractor={item => item.id.toString()}
       contentContainerStyle={styles.container}

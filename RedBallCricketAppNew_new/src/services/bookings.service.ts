@@ -30,7 +30,8 @@ export const BookingsService = {
    * Get my bookings (Current user)
    */
   async getMyBookings(): Promise<Booking[]> {
-    return await ApiService.get<Booking[]>(API_ENDPOINTS.MY_BOOKINGS);
+    const response: any = await ApiService.get<any>(API_ENDPOINTS.MY_BOOKINGS);
+    return response.results || response || [];
   },
 
   /**

@@ -5,7 +5,8 @@ import { Booking, Sport, Slot } from '../types';
 export const AdminService = {
   // Booking Management
   async getAllBookings(): Promise<Booking[]> {
-    return await ApiService.get(API_ENDPOINTS.ADMIN_BOOKINGS);
+    const response: any = await ApiService.get(API_ENDPOINTS.ADMIN_BOOKINGS);
+    return response.results || response || [];
   },
 
   async cancelBooking(bookingId: number): Promise<void> {
@@ -33,7 +34,8 @@ export const AdminService = {
 
   // Slots Management
   async getAllSlots(): Promise<Slot[]> {
-    return await ApiService.get(API_ENDPOINTS.ADMIN_SLOTS);
+    const response: any = await ApiService.get(API_ENDPOINTS.ADMIN_SLOTS);
+    return response.results || response || [];
   },
 
   async createSlot(data: Partial<Slot>): Promise<Slot> {
@@ -50,7 +52,9 @@ export const AdminService = {
 
   // Sports Management
   async getAllSports(): Promise<Sport[]> {
-    return await ApiService.get(API_ENDPOINTS.ADMIN_SPORTS);
+    const response: any = await ApiService.get(API_ENDPOINTS.ADMIN_SPORTS);
+    // Handle paginated response from Django REST Framework
+    return response.results || response || [];
   },
 
   async bulkCreateSlots(data: {

@@ -14,9 +14,10 @@ import Loading from '../../components/Loading';
 import { AdminService } from '../../services/admin.service';
 import { formatDate, formatTime, formatCurrency } from '../../utils/helpers';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { Booking } from '../../types';
 
 const AllBookingsScreen = () => {
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -28,16 +29,17 @@ const AllBookingsScreen = () => {
     try {
       setLoading(true);
       const response = await AdminService.getAllBookings();
-      setBookings(response);
+      setBookings(Array.isArray(response) ? response : []);
     } catch (error) {
       Alert.alert('Error', 'Failed to load bookings');
+      setBookings([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleCancelBooking = async (bookingId) => {
+  const handleCancelBooking = async (bookingId: number) => {
     Alert.alert(
       'Cancel Booking',
       'Are you sure you want to cancel this booking?',
@@ -60,8 +62,14 @@ const AllBookingsScreen = () => {
     );
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
+  const getBookingStatus = (booking: Booking): string => {
+    if (booking.is_cancelled) return 'cancelled';
+    if (booking.payment_verified) return 'confirmed';
+    return 'pending';
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
       confirmed: Colors.success,
       pending: Colors.warning,
       cancelled: Colors.error,
@@ -69,19 +77,22 @@ const AllBookingsScreen = () => {
     return colors[status] || Colors.text.secondary;
   };
 
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item }: { item: Booking }) => {
+    const status = getBookingStatus(item);
+    
+    return (
     <Card style={styles.bookingCard}>
       <View style={styles.header}>
         <View>
           <Text style={styles.bookingId}>Booking #{item.id}</Text>
-          <Text style={[styles.status, { color: getStatusColor(item.status) }]}>
-            {item.status.toUpperCase()}
+          <Text style={[styles.status, { color: getStatusColor(status) }]}>
+            {status.toUpperCase()}
           </Text>
         </View>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleCancelBooking(item.id)}
-          disabled={item.status === 'cancelled'}>
+          disabled={item.is_cancelled}>
           <Icon name="trash" size={20} color={Colors.error} />
         </TouchableOpacity>
       </View>
@@ -132,7 +143,8 @@ const AllBookingsScreen = () => {
         </TouchableOpacity>
       )}
     </Card>
-  );
+    );
+  };
 
   if (loading) {
     return <Loading />;
@@ -141,7 +153,7 @@ const AllBookingsScreen = () => {
   return (
     <FlatList
       style={styles.container}
-      data={bookings}
+      data={bookings || []}
       renderItem={renderItem}
       keyExtractor={item => item.id.toString()}
       refreshControl={

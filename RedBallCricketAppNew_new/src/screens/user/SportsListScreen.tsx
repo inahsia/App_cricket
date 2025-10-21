@@ -131,7 +131,7 @@ const SportsListScreen: React.FC<Props> = ({navigation}) => {
         </View>
       ) : (
         <FlatList
-          data={sports}
+          data={sports || []}
           renderItem={renderSport}
           keyExtractor={item => `sport-${item?.id || Math.random()}`}
           contentContainerStyle={styles.list}

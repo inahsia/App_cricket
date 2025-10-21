@@ -43,7 +43,8 @@ export const SlotsService = {
       ? `${API_ENDPOINTS.SLOTS}?${params.toString()}`
       : API_ENDPOINTS.SLOTS;
     
-    return await ApiService.get<Slot[]>(url);
+    const response: any = await ApiService.get<any>(url);
+    return response.results || response || [];
   },
 
   /**
