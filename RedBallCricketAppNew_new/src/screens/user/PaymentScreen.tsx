@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {View, Text, StyleSheet, Alert} from 'react-native';
 import {useRoute, useNavigation} from '@react-navigation/native';
-import PaymentsService from '../../services/payments.service';
+import BookingsService from '../../services/bookings.service';
 import Button from '../../components/Button';
 import Card from '../../components/Card';
 import Colors from '../../config/colors';
@@ -17,18 +17,13 @@ const PaymentScreen = () => {
   const handlePayment = async () => {
     try {
       setLoading(true);
-
-      // Create Razorpay order
-      const order = await PaymentsService.createPayment({
-        booking_id: booking.id,
-        amount: booking.total_amount,
-      });
-
-      // In a real app, you would integrate Razorpay SDK here
-      // For now, we'll simulate a successful payment
+      
+      // Confirm payment on backend
+      await BookingsService.confirmPayment(booking.id);
+      
       Alert.alert(
-        'Payment',
-        'Payment functionality will be integrated with Razorpay SDK. For now, marking as completed.',
+        'Success',
+        'Payment confirmed! Your booking is now confirmed.',
         [
           {
             text: 'OK',
@@ -43,9 +38,10 @@ const PaymentScreen = () => {
         ],
       );
     } catch (error: any) {
+      console.error('Payment confirmation error:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.error || 'Payment failed. Please try again.',
+        error.response?.data?.error || 'Failed to confirm payment. Please try again.',
       );
     } finally {
       setLoading(false);

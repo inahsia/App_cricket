@@ -84,19 +84,19 @@ const MyBookingsScreen = () => {
   const renderBooking = ({item}: {item: any}) => (
     <Card style={styles.bookingCard}>
       <View style={styles.bookingHeader}>
-        <Text style={styles.sportName}>{item.slot?.sport_name || 'N/A'}</Text>
+        <Text style={styles.sportName}>{item.slot_details?.sport_name || 'N/A'}</Text>
         <View
           style={[
             styles.statusBadge,
             {backgroundColor: getStatusColor(item.status)},
           ]}>
-          <Text style={styles.statusText}>{item.status}</Text>
+          <Text style={styles.statusText}>{item.status || 'Confirmed'}</Text>
         </View>
       </View>
 
-      <Text style={styles.date}>{formatDate(item.slot?.date)}</Text>
+      <Text style={styles.date}>{formatDate(item.slot_details?.date)}</Text>
       <Text style={styles.time}>
-        {item.slot?.start_time} - {item.slot?.end_time}
+        {item.slot_details?.start_time} - {item.slot_details?.end_time}
       </Text>
 
       <View style={styles.divider} />
@@ -108,26 +108,10 @@ const MyBookingsScreen = () => {
 
       <View style={styles.detailRow}>
         <Text style={styles.label}>Total Amount:</Text>
-        <Text style={styles.price}>{formatCurrency(item.total_amount)}</Text>
+        <Text style={styles.price}>{formatCurrency(item.amount_paid || '0')}</Text>
       </View>
 
-      {item.payment_status && (
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>Payment:</Text>
-          <Text
-            style={[
-              styles.value,
-              {
-                color:
-                  item.payment_status === 'completed'
-                    ? Colors.success
-                    : Colors.warning,
-              },
-            ]}>
-            {item.payment_status}
-          </Text>
-        </View>
-      )}
+      {/* Payment status can be added here if available */}
 
       {item.status === 'confirmed' && (
         <TouchableOpacity

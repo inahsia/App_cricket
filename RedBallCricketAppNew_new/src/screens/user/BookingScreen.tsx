@@ -50,28 +50,21 @@ const BookingScreen = () => {
 
       setLoading(true);
 
-      // Create booking
+      // Create booking with only slot ID
       const booking = await BookingsService.createBooking({
         slot: slot.id,
-        players: validPlayers,
       });
 
-      Alert.alert(
-        'Success',
-        'Booking created successfully! Please proceed to payment.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.navigate('Payment' as never, {booking} as never);
-            },
-          },
-        ],
-      );
+      // Navigate to payment with booking and player info
+      navigation.navigate('Payment' as never, {
+        booking,
+        players: validPlayers,
+      } as never);
     } catch (error: any) {
+      console.error('Booking error:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.error || 'Failed to create booking',
+        error.response?.data?.error || error.response?.data?.slot?.[0] || 'Failed to create booking. Please try again.',
       );
     } finally {
       setLoading(false);

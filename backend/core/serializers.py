@@ -97,8 +97,8 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'user_details', 'slot', 'slot_details', 
                   'players', 'player_count', 'created_at', 'updated_at', 
                   'payment_verified', 'payment_id', 'order_id', 'amount_paid',
-                  'is_cancelled', 'cancellation_reason']
-        read_only_fields = ['id', 'created_at', 'updated_at', 'payment_verified']
+                  'is_cancelled', 'cancellation_reason', 'status']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'payment_verified', 'status']
 
     def get_player_count(self, obj):
         return obj.players.count()

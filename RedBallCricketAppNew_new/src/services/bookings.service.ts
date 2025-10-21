@@ -77,6 +77,16 @@ export const BookingsService = {
       data
     );
   },
+
+  /**
+   * Confirm payment for booking
+   */
+  async confirmPayment(bookingId: number): Promise<{ message: string; status: string }> {
+    return await ApiService.post(
+      `${API_ENDPOINTS.BOOKINGS}${bookingId}/confirm_payment/`,
+      {}
+    );
+  },
 };
 
 export default BookingsService;

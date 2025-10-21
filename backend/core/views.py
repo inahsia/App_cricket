@@ -95,11 +95,12 @@ class SportViewSet(viewsets.ModelViewSet):
     """ViewSet for Sport CRUD operations"""
     queryset = Sport.objects.filter(is_active=True)
     serializer_class = SportSerializer
+    permission_classes = [IsAuthenticated]
     
     def get_permissions(self):
-        """Admin can create/update/delete, others can only view"""
+        """Admin can create/update/delete, authenticated users can view"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAdminUser()]
+            return [IsAuthenticated(), IsAdminUser()]
         return [AllowAny()]
 
     @action(detail=True, methods=['get'])
@@ -145,6 +146,9 @@ class SlotViewSet(viewsets.ModelViewSet):
         if available and available.lower() == 'true':
             today = timezone.now().date()
             queryset = queryset.filter(is_booked=False, date__gte=today)
+        
+        # Log the query for debugging
+        print(f"Slots Query - Sport: {sport_id}, Available: {available}, Count: {queryset.count()}")
 
         return queryset.order_by('date', 'start_time')
 
@@ -165,6 +169,13 @@ class SlotViewSet(viewsets.ModelViewSet):
 
 
 class BookingViewSet(viewsets.ModelViewSet):
+    @action(detail=True, methods=['post'])
+    def confirm_payment(self, request, pk=None):
+        """Confirm payment for a booking and update status"""
+        booking = self.get_object()
+        booking.payment_verified = True
+        booking.save()
+        return Response({'message': 'Payment confirmed', 'status': booking.status})
     """ViewSet for Booking operations"""
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
@@ -188,6 +199,13 @@ class BookingViewSet(viewsets.ModelViewSet):
         serializer = BookingCreateSerializer(data=request.data)
         if serializer.is_valid():
             slot = serializer.validated_data['slot']
+            
+            # Double-check slot availability
+            if slot.is_booked:
+                return Response(
+                    {'error': 'This slot has already been booked. Please select another slot.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Create booking
             booking = Booking.objects.create(
@@ -381,25 +399,28 @@ def dashboard_stats(request):
     
     today = timezone.now().date()
     
+    logs = CheckInLog.objects.select_related('player').order_by('-timestamp')[:20]
+    log_data = [
+        {
+            'player': log.player.name,
+            'action': log.action,
+            'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'booking_id': log.player.booking.id if log.player.booking else None,
+        }
+        for log in logs
+    ]
     stats = {
-        'total_bookings': Booking.objects.count(),
-        'active_bookings': Booking.objects.filter(
-            is_cancelled=False,
-            slot__date__gte=today
-        ).count(),
+        'total_bookings': Booking.objects.filter(payment_verified=True, is_cancelled=False).count(),
+        'active_bookings': Booking.objects.filter(payment_verified=True, is_cancelled=False, slot__date__gte=today).count(),
         'total_revenue': sum([
-            float(b.amount_paid) for b in Booking.objects.filter(
-                payment_verified=True
-            ) if b.amount_paid
+            float(b.amount_paid) for b in Booking.objects.filter(payment_verified=True, is_cancelled=False) if b.amount_paid
         ]),
-        'total_players': Player.objects.count(),
-        'checked_in_today': Player.objects.filter(
-            last_check_in__date=today
-        ).count(),
-        'available_slots': TimeSlot.objects.filter(
-            is_booked=False,
-            date__gte=today
-        ).count()
+        'total_players': Player.objects.filter(booking__payment_verified=True, booking__is_cancelled=False).count(),
+        'checked_in_today': Player.objects.filter(last_check_in__date=today, booking__payment_verified=True, booking__is_cancelled=False).count(),
+        'available_slots': TimeSlot.objects.filter(is_booked=False, date__gte=today).count(),
+        'sports_count': Sport.objects.filter(is_active=True).count(),
+        'slots_count': TimeSlot.objects.filter(date__gte=today).count(),
+        'recent_logs': log_data,
     }
     
     return Response(stats)

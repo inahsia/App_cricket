@@ -79,11 +79,14 @@ const AllBookingsScreen = () => {
 
   const renderItem = ({ item }: { item: Booking }) => {
     const status = getBookingStatus(item);
+    const userName = item.user_details?.first_name && item.user_details?.last_name
+      ? `${item.user_details.first_name} ${item.user_details.last_name}`
+      : item.user_details?.username || 'Unknown User';
     
     return (
     <Card style={styles.bookingCard}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.bookingId}>Booking #{item.id}</Text>
           <Text style={[styles.status, { color: getStatusColor(status) }]}>
             {status.toUpperCase()}
@@ -97,12 +100,31 @@ const AllBookingsScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.details}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Sport:</Text>
-          <Text style={styles.value}>{item.slot_details?.sport_name}</Text>
+      {/* Prominent User and Sport Info */}
+      <View style={styles.prominentInfo}>
+        <View style={styles.infoItem}>
+          <Icon name="user" size={16} color={Colors.primary} style={styles.infoIcon} />
+          <View>
+            <Text style={styles.infoLabel}>Customer</Text>
+            <Text style={styles.infoValue}>{userName}</Text>
+            {item.user_details?.email && (
+              <Text style={styles.infoSubtext}>{item.user_details.email}</Text>
+            )}
+          </View>
         </View>
 
+        <View style={styles.infoItem}>
+          <Icon name="futbol-o" size={16} color={Colors.primary} style={styles.infoIcon} />
+          <View>
+            <Text style={styles.infoLabel}>Sport</Text>
+            <Text style={styles.infoValue}>{item.slot_details?.sport_name || 'N/A'}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.details}>
         <View style={styles.row}>
           <Text style={styles.label}>Date:</Text>
           <Text style={styles.value}>
@@ -119,19 +141,12 @@ const AllBookingsScreen = () => {
 
         <View style={styles.row}>
           <Text style={styles.label}>Players:</Text>
-          <Text style={styles.value}>{item.player_count}</Text>
+          <Text style={styles.value}>{item.player_count || 0}</Text>
         </View>
 
         <View style={styles.row}>
           <Text style={styles.label}>Amount:</Text>
-          <Text style={styles.value}>{formatCurrency(item.amount_paid)}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Customer:</Text>
-          <Text style={styles.value}>
-            {item.user_details?.first_name} {item.user_details?.last_name}
-          </Text>
+          <Text style={styles.value}>{formatCurrency(item.amount_paid || '0')}</Text>
         </View>
       </View>
 
@@ -184,6 +199,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 16,
   },
+  headerLeft: {
+    flex: 1,
+  },
   bookingId: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -196,6 +214,38 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     padding: 8,
+  },
+  prominentInfo: {
+    marginBottom: 16,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  infoIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  infoSubtext: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: 12,
   },
   details: {
     marginBottom: 16,

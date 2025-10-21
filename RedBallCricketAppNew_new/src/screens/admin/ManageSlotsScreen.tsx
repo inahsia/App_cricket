@@ -326,7 +326,7 @@ const ManageSlotsScreen = () => {
             </TouchableOpacity>
             {showEndTimePicker && (
               <DateTimePicker
-                value={endTime}
+                value={endTime || new Date()}
                 mode="time"
                 display="default"
                 onChange={(event, time) => {

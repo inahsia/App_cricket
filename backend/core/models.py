@@ -117,6 +117,20 @@ class Booking(models.Model):
     )
     is_cancelled = models.BooleanField(default=False)
     cancellation_reason = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, default='pending')
+    def save(self, *args, **kwargs):
+        # Automatically update status based on payment_verified and cancellation
+        if self.payment_verified:
+            self.status = 'confirmed'
+        elif self.is_cancelled:
+            self.status = 'cancelled'
+            # Free up the slot when booking is cancelled
+            if self.slot and self.slot.is_booked:
+                self.slot.is_booked = False
+                self.slot.save()
+        else:
+            self.status = 'pending'
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['-created_at']
