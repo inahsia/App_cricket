@@ -16,12 +16,10 @@ urlpatterns = [
     path('', include(router.urls)),
     
     # Authentication endpoints
-    path('auth/register/', views.register_user, name='register'),
-    path('auth/login/', views.login_user, name='login'),
+    path('auth/jwt_login/', views.jwt_login, name='jwt_login'),
+    path('auth/jwt_register/', views.jwt_register, name='jwt_register'),
     
     # Payment endpoints
-    path('payments/create-order/', views.create_payment_order, name='create_payment_order'),
-    path('payments/verify/', views.verify_payment, name='verify_payment'),
     
     # Dashboard
     path('dashboard/stats/', views.dashboard_stats, name='dashboard_stats'),

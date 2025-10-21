@@ -97,9 +97,12 @@ export interface DashboardStats {
 }
 
 export interface AuthResponse {
+  access: string;
+  refresh: string;
   user: User;
-  token: string;
-  message: string;
+  is_staff?: boolean;
+  user_type?: 'admin' | 'user' | 'player' | 'customer';
+  message?: string;
 }
 
 export interface ApiError {

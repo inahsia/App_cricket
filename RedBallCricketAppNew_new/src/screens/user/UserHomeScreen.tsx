@@ -10,6 +10,7 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import AuthService from '../../services/auth.service';
 import DashboardService from '../../services/dashboard.service';
+import BookingsService from '../../services/bookings.service';
 import Card from '../../components/Card';
 import Loading from '../../components/Loading';
 import Colors from '../../config/colors';
@@ -30,12 +31,32 @@ const UserHomeScreen = () => {
       const currentUser = await AuthService.getCurrentUser();
       setUser(currentUser);
 
-      // Load user stats if available
+      // Only admins should call admin dashboard stats endpoint
       try {
-        const userStats = await DashboardService.getStats();
-        setStats(userStats);
+        const role = await AuthService.getUserRole();
+        if (role === 'admin') {
+          const adminStats = await DashboardService.getStats();
+          setStats(adminStats);
+        } else {
+          // For non-admin users, compute lightweight stats from their own bookings
+          const myBookings = await BookingsService.getMyBookings();
+          const today = new Date();
+          const upcomingCount = myBookings.filter((b: any) => {
+            const dStr = b?.slot_details?.date;
+            if (!dStr) return false;
+            const d = new Date(`${dStr}T00:00:00`);
+            // Consider future or same-day as upcoming
+            return d >= new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          }).length;
+
+          setStats({
+            total_bookings: myBookings.length,
+            upcoming_bookings: upcomingCount,
+          });
+        }
       } catch (err) {
-        console.log('Stats not available');
+        // Swallow expected errors quietly to avoid noisy logs in user flow
+        console.log('Skipping admin stats for non-admin or stats unavailable');
       }
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load user data');

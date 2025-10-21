@@ -72,9 +72,7 @@ const ManageSportsScreen = () => {
     const payload: Partial<Sport> = {
       name: name.trim(),
       description: description.trim(),
-      price_per_hour: Number(pricePerHour) || 0,
-      duration_minutes: Number(durationMinutes) || 60,
-      max_players: Number(maxPlayers) || 1,
+      price_per_hour: pricePerHour || '0',
       is_active: true,
     };
 
@@ -143,7 +141,7 @@ const ManageSportsScreen = () => {
         </View>
       ) : (
         <FlatList
-          data={sports}
+          data={sports || []}
           renderItem={renderSport}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.list}

@@ -19,7 +19,6 @@ interface RegisterData {
   first_name?: string;
   last_name?: string;
 }
-
 export const AuthService = {
   /**
    * Login user
@@ -35,24 +34,26 @@ export const AuthService = {
       }
       
       const response = await ApiService.post<AuthResponse>(
-        API_ENDPOINTS.LOGIN,
+        '/auth/jwt_login/',
         {
           username: data.username,
           password: data.password
         }
       );
       
-      console.log('Login successful with status:', response.status);
+  console.log('Login successful:', response);
       
-      if (response.token) {
-        await StorageService.setAuthToken(response.token);
+      if (response.access) {
+        await StorageService.setAuthToken(response.access);
         await StorageService.setUserData(response.user);
-        
-        if (response.user.is_staff) {
-          await StorageService.setUserRole('admin');
-        } else {
-          await StorageService.setUserRole('user');
+        // Determine role from response
+        let role: 'admin' | 'user' | 'player' = 'user';
+        if (response.is_staff || (response.user && response.user.is_staff)) {
+          role = 'admin';
+        } else if (response.user_type === 'player') {
+          role = 'player';
         }
+        await StorageService.setUserRole(role);
       }
       
       return response;
@@ -81,16 +82,23 @@ export const AuthService = {
       console.log('Registration data:', debug);
       
       const response = await ApiService.post<AuthResponse>(
-        API_ENDPOINTS.REGISTER,
+        '/auth/jwt_register/',
         data,
       );
       
       console.log('Registration success:', {...response, token: '[REDACTED]'});
       
-      if (response.token) {
-        await StorageService.setAuthToken(response.token);
+      if (response.access) {
+        await StorageService.setAuthToken(response.access);
         await StorageService.setUserData(response.user);
-        await StorageService.setUserRole('user');
+        // Determine role from response
+        let role: 'admin' | 'user' | 'player' = 'user';
+        if (response.is_staff || (response.user && response.user.is_staff)) {
+          role = 'admin';
+        } else if (response.user_type === 'player') {
+          role = 'player';
+        }
+        await StorageService.setUserRole(role);
       }
       
       return response;
