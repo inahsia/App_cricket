@@ -65,8 +65,8 @@ class PlayerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Player
         fields = ['id', 'booking', 'name', 'email', 'phone', 'qr_code', 
-                  'qr_code_url', 'check_in_count', 'status', 'last_check_in', 
-                  'last_check_out', 'booking_details', 'created_at']
+                      'qr_code_url', 'check_in_count', 'status', 'last_check_in', 
+                      'last_check_out', 'booking_details', 'created_at']
         read_only_fields = ['id', 'qr_code', 'check_in_count', 'last_check_in', 
                            'last_check_out', 'created_at']
 
@@ -162,7 +162,8 @@ class CheckInLogSerializer(serializers.ModelSerializer):
 
 class QRCodeScanSerializer(serializers.Serializer):
     """Serializer for QR code scanning"""
-    qr_data = serializers.JSONField()
+    qr_data = serializers.JSONField(required=False)
+    token = serializers.CharField(required=False)
 
     def validate_qr_data(self, value):
         """Validate QR code data"""

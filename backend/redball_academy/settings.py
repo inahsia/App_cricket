@@ -177,3 +177,8 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')  # Your Gmail address
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')  # Your Gmail App Password
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='')  # Your Gmail address
 
+# Celery / Redis (optional but recommended for async emails)
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
+

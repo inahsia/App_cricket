@@ -4,7 +4,7 @@
 
 import ApiService from './api.service';
 import { API_ENDPOINTS } from '../config/api';
-import { Booking } from '../types';
+import { Booking, Player } from '../types';
 
 interface CreateBookingData {
   slot: number;
@@ -51,10 +51,10 @@ export const BookingsService = {
   /**
    * Add players to booking
    */
-  async addPlayers(bookingId: number, data: AddPlayersData): Promise<Booking> {
-    return await ApiService.post<Booking>(
-      API_ENDPOINTS.ADD_PLAYERS(bookingId),
-      data
+  async addPlayers(bookingId: number, data: AddPlayersData): Promise<{ created: number; players: Player[]; errors: any[] }> {
+    return await ApiService.post(
+      API_ENDPOINTS.PLAYERS_REGISTER_FORM,
+      { booking: bookingId, players: data.players }
     );
   },
 

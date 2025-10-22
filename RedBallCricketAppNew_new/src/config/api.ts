@@ -17,8 +17,8 @@ export const BASE_URL = `${
 
 export const API_ENDPOINTS = {
   // Authentication
-  REGISTER: '/auth/register/',
-  LOGIN: '/auth/login/',
+  REGISTER: '/auth/jwt_register/',
+  LOGIN: '/auth/jwt_login/',
   
   // Sports
   SPORTS: '/sports/',
@@ -32,11 +32,12 @@ export const API_ENDPOINTS = {
   BOOKINGS: '/bookings/',
   MY_BOOKINGS: '/bookings/my_bookings/',
   CANCEL_BOOKING: (id: number) => `/bookings/${id}/cancel/`,
-  ADD_PLAYERS: (id: number) => `/bookings/${id}/add_players/`,
+  // Player bulk registration (by booking)
+  PLAYERS_REGISTER_FORM: '/players/register_form/',
   
   // Players
   PLAYERS: '/players/',
-  PLAYER_PROFILE: '/players/my_profile/',
+  PLAYER_PROFILE: '/players/me/',
   SCAN_QR: '/players/scan_qr/',
   
   // Payments

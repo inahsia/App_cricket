@@ -5,12 +5,10 @@ import AuthService from '../../services/auth.service';
 import Card from '../../components/Card';
 import Loading from '../../components/Loading';
 import Colors from '../../config/colors';
-import {formatDate} from '../../utils/helpers';
 
 const PlayerDashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [playerInfo, setPlayerInfo] = useState<any>(null);
-  const [booking, setBooking] = useState<any>(null);
 
   useEffect(() => {
     loadPlayerData();
@@ -20,17 +18,11 @@ const PlayerDashboardScreen = () => {
     try {
       setLoading(true);
       const user = await AuthService.getCurrentUser();
-      
-      // Get player info
-      const players = await PlayersService.getAllPlayers();
-      const myPlayer = players.find((p: any) => p.name === user.username);
-      setPlayerInfo(myPlayer);
-
-      // Get today's booking if any
-      if (myPlayer) {
-        // You would call an API to get player's booking for today
-        // For now, we'll just show player info
+      if (!user) {
+        throw new Error('Not authenticated');
       }
+      const myPlayer = await PlayersService.getMyProfile();
+      setPlayerInfo(myPlayer);
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load player data');
     } finally {
@@ -57,8 +49,28 @@ const PlayerDashboardScreen = () => {
             <Text style={styles.value}>#{playerInfo.id}</Text>
           </View>
           <View style={styles.infoRow}>
+            <Text style={styles.label}>Email:</Text>
+            <Text style={styles.value}>{playerInfo.email}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Sport:</Text>
+            <Text style={styles.value}>{playerInfo?.booking_details?.sport}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Date:</Text>
+            <Text style={styles.value}>{playerInfo?.booking_details?.slot_date}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Time:</Text>
+            <Text style={styles.value}>{playerInfo?.booking_details?.start_time} - {playerInfo?.booking_details?.end_time}</Text>
+          </View>
+          <View style={styles.infoRow}>
             <Text style={styles.label}>QR Code Status:</Text>
             <Text style={[styles.value, {color: Colors.success}]}>Active</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Current Status:</Text>
+            <Text style={[styles.value]}>{playerInfo?.status}</Text>
           </View>
         </Card>
       )}
@@ -106,7 +118,7 @@ const PlayerDashboardScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background.default,
+    backgroundColor: Colors.background,
   },
   header: {
     margin: 16,
@@ -171,7 +183,7 @@ const styles = StyleSheet.create({
   noteCard: {
     margin: 16,
     marginTop: 0,
-    backgroundColor: Colors.background.paper,
+    backgroundColor: Colors.surface,
   },
   noteTitle: {
     fontSize: 16,

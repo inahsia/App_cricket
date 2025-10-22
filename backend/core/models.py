@@ -13,6 +13,17 @@ from io import BytesIO
 from django.core.files import File
 from PIL import Image
 import json
+from django.conf import settings
+from django.core.mail import send_mail
+try:
+    # Optional Celery task for async emails; fallback to direct send if unavailable
+    from .tasks import send_player_credentials_email  # type: ignore
+except Exception:
+    send_player_credentials_email = None
+try:
+    from .tasks import send_player_credentials_email
+except Exception:
+    send_player_credentials_email = None
 
 
 class CustomUserManager(BaseUserManager):
@@ -165,6 +176,7 @@ class Booking(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     payment_verified = models.BooleanField(default=False)
+    qr_token = models.CharField(max_length=512, blank=True, null=True)
     payment_id = models.CharField(max_length=255, blank=True, null=True)
     order_id = models.CharField(max_length=255, blank=True, null=True)
     amount_paid = models.DecimalField(
@@ -225,6 +237,7 @@ class Player(models.Model):
         related_name='player_profile'
     )
     qr_code = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
+    qr_token = models.CharField(max_length=512, blank=True, null=True)
     check_in_count = models.IntegerField(default=0)
     last_check_in = models.DateTimeField(null=True, blank=True)
     last_check_out = models.DateTimeField(null=True, blank=True)
@@ -239,22 +252,25 @@ class Player(models.Model):
         return f"{self.name} ({self.email})"
 
     def generate_qr_code(self):
-        """Generate QR code for player check-in"""
-        qr_data = {
+        """Generate QR code with a signed token payload"""
+        from django.core import signing
+        payload = {
             'player_id': self.id,
             'booking_id': self.booking.id,
-            'date': str(self.booking.slot.date),
-            'name': self.name,
-            'email': self.email
+            'ts': timezone.now().isoformat(),
         }
-        
+        # Signed (tamper-proof) token
+        token = signing.dumps(payload, salt='player-qr-token')
+        self.qr_token = token
+
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
             box_size=10,
             border=4,
         )
-        qr.add_data(json.dumps(qr_data))
+        # Encode only the token in the QR image
+        qr.add_data(token)
         qr.make(fit=True)
 
         img = qr.make_image(fill_color="black", back_color="white")
@@ -318,3 +334,79 @@ class CheckInLog(models.Model):
 
     def __str__(self):
         return f"{self.player.name} - {self.action} at {self.timestamp}"
+
+
+# Automatically handle Player creation side-effects
+@receiver(post_save, sender=Player)
+def ensure_player_account_qr_and_email(sender, instance: Player, created, **kwargs):
+    """On Player create:
+    - Create/attach a CustomUser with default password 'redball' if missing
+    - Ensure profile.user_type = 'player'
+    - Generate QR code if not present
+    - Email credentials and booking details
+    """
+    if not created:
+        return
+
+    player = instance
+
+    # 1) Create/attach user account
+    user = player.user
+    if not user and player.email:
+        # Try to find existing user by email
+        user = CustomUser.objects.filter(email__iexact=player.email).first()
+        if not user:
+            user = CustomUser.objects.create_user(
+                email=player.email,
+                password='redball',
+                first_name=player.name,
+            )
+        # Mark as player and attach
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if profile.user_type != 'player':
+            profile.user_type = 'player'
+            profile.save()
+        # Save relation
+        player.user = user
+        player.save(update_fields=['user'])
+
+    # 2) Generate QR code if missing
+    if not player.qr_code:
+        try:
+            player.generate_qr_code()
+            player.save(update_fields=['qr_code'])
+        except Exception:
+            pass
+
+    # 3) Email credentials (best-effort). Prefer Celery if available
+    try:
+        booking = player.booking
+        slot = booking.slot if booking else None
+        sport_name = slot.sport.name if slot else ''
+        date_str = str(slot.date) if slot else ''
+        time_window = f"{slot.start_time} - {slot.end_time}" if slot else ''
+        if send_player_credentials_email:
+            send_player_credentials_email.delay(player.email, player.name, sport_name, date_str, time_window)
+        else:
+            send_mail(
+                subject='Your Player Account - Red Ball Cricket Academy',
+                message=(
+                    f"Hello {player.name},\n\n"
+                    f"An account has been created for you at Red Ball Cricket Academy.\n\n"
+                    f"Login Details:\n"
+                    f"Email: {player.email}\n"
+                    f"Temporary Password: redball\n\n"
+                    f"Booking Details:\n"
+                    f"Sport: {sport_name}\n"
+                    f"Date: {date_str}\n"
+                    f"Time: {time_window}\n\n"
+                    f"Use the app to view your QR code and check-in on the day of your booking.\n"
+                    f"For security, please change your password after first login.\n\n"
+                    f"Regards,\nRed Ball Cricket Academy"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[player.email] if player.email else [],
+                fail_silently=True,
+            )
+    except Exception:
+        pass

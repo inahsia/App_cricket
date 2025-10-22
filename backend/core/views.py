@@ -346,12 +346,20 @@ class PlayerViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """Filter based on user role"""
-        if self.request.user.is_staff:
+        """Filter players based on user role
+        - Admins: see all players
+        - Players: see only their own player record
+        - Customers: see players from their own bookings
+        """
+        user = self.request.user
+        if user.is_staff:
             return Player.objects.all()
-        
-        # Users see players from their bookings
-        return Player.objects.filter(booking__user=self.request.user)
+        # If logged-in user is a player, return their player profile
+        profile = getattr(user, 'profile', None)
+        if profile and getattr(profile, 'user_type', None) == 'player':
+            return Player.objects.filter(user=user)
+        # Otherwise, users see players from their bookings
+        return Player.objects.filter(booking__user=user)
 
     def create(self, request, *args, **kwargs):
         """Create a new player and generate account"""
@@ -373,26 +381,21 @@ class PlayerViewSet(viewsets.ModelViewSet):
                     {'error': 'Payment must be verified before adding players'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # Create user account for player
-            email = serializer.validated_data['email']
-            
-            try:
-                user = User.objects.create_user(
-                    email=email,
-                    password='redball',
-                    first_name=serializer.validated_data['name']
+            # Enforce max players limit for this slot/sport
+            current_count = booking.players.count()
+            # Prefer slot.max_players; fallback to sport.max_players
+            max_allowed = booking.slot.max_players or booking.slot.sport.max_players
+            if current_count >= max_allowed:
+                return Response(
+                    {
+                        'error': f'Maximum players reached for this booking. Allowed: {max_allowed}',
+                        'current_players': current_count,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-            except:
-                # User might already exist
-                user = User.objects.filter(email=email).first()
             
-            # Create player
-            player = serializer.save(user=user)
-            
-            # Generate QR code
-            player.generate_qr_code()
-            player.save()
+            # Create player. Account creation, QR, and email will be handled by a post_save signal.
+            player = serializer.save()
             
             response_serializer = PlayerSerializer(player, context={'request': request})
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -421,9 +424,24 @@ class PlayerViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        qr_data = serializer.validated_data['qr_data']
-        player_id = qr_data.get('player_id')
-        booking_date = qr_data.get('date')
+        token = serializer.validated_data.get('token')
+        qr_data = serializer.validated_data.get('qr_data')
+        player_id = None
+        booking_date = None
+        if token:
+            # Decode signed token
+            from django.core import signing
+            try:
+                data = signing.loads(token, salt='player-qr-token')
+                player_id = data.get('player_id')
+                # We still validate booking date from DB below
+            except signing.BadSignature:
+                return Response({'error': 'Invalid QR token'}, status=status.HTTP_400_BAD_REQUEST)
+        elif qr_data:
+            player_id = qr_data.get('player_id')
+            booking_date = qr_data.get('date')
+        else:
+            return Response({'error': 'No QR data or token provided'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             player = Player.objects.get(id=player_id)
@@ -435,9 +453,15 @@ class PlayerViewSet(viewsets.ModelViewSet):
         
         # Check if booking date matches today
         today = str(timezone.now().date())
-        if booking_date != today:
+        booking_date_db = str(player.booking.slot.date)
+        if booking_date and booking_date != today:
             return Response(
                 {'error': f'This QR code is valid only for {booking_date}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not booking_date and booking_date_db != today:
+            return Response(
+                {'error': f'This QR code is valid only for {booking_date_db}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -462,6 +486,76 @@ class PlayerViewSet(viewsets.ModelViewSet):
             'message': message,
             'player': PlayerSerializer(player, context={'request': request}).data
         })
+
+    @action(detail=False, methods=['post'])
+    def register_form(self, request):
+        """Bulk register players for a booking.
+        Payload: {"booking": <id>, "players": [{"name": ..., "email": ..., "phone": ...}, ...]}
+        """
+        booking_id = request.data.get('booking')
+        players = request.data.get('players', [])
+
+        if not booking_id or not isinstance(players, list) or len(players) == 0:
+            return Response({'error': 'booking and players[] are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        booking = get_object_or_404(Booking, id=booking_id)
+        # Only owner or admin can add
+        if booking.user != request.user and not request.user.is_staff:
+            return Response({'error': 'You do not have permission to add players to this booking'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not booking.payment_verified:
+            return Response({'error': 'Payment must be verified before adding players'}, status=status.HTTP_400_BAD_REQUEST)
+
+        max_allowed = booking.slot.max_players or booking.slot.sport.max_players
+        current_count = booking.players.count()
+        available = max_allowed - current_count
+        if len(players) > available:
+            return Response({'error': f'You can only add {available} more players', 'max_allowed': max_allowed, 'current': current_count}, status=status.HTTP_400_BAD_REQUEST)
+
+        created = []
+        errors = []
+        with transaction.atomic():
+            for p in players:
+                name = (p or {}).get('name')
+                email = (p or {}).get('email')
+                phone = (p or {}).get('phone')
+                if not name or not email:
+                    errors.append({'name': name, 'email': email, 'error': 'name and email are required'})
+                    continue
+                player = Player.objects.create(booking=booking, name=name, email=email.lower().strip(), phone=phone)
+                created.append(player)
+
+        data = PlayerSerializer(created, many=True, context={'request': request}).data
+        return Response({'created': len(created), 'players': data, 'errors': errors}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def toggle_status(self, request, pk=None):
+        """Toggle check-in/check-out for a specific player id (admin/coach tool)"""
+        player = self.get_object()
+        today = timezone.now().date()
+        if str(player.booking.slot.date) != str(today):
+            return Response({'error': 'Can only toggle on the booking date'}, status=status.HTTP_400_BAD_REQUEST)
+        # Use same logic as scanning
+        if player.check_in_count == 0:
+            player.check_in()
+            CheckInLog.objects.create(player=player, action='IN')
+            message = 'Successfully checked in'
+        elif player.check_in_count == 1:
+            player.check_in()
+            CheckInLog.objects.create(player=player, action='OUT')
+            message = 'Successfully checked out'
+        else:
+            return Response({'error': 'Maximum check-ins reached for today'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': message, 'status': player.get_status()})
+
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        """Return the current player's own record with booking and QR details"""
+        user = request.user
+        player = Player.objects.filter(user=user).first()
+        if not player:
+            return Response({'error': 'Player profile not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PlayerSerializer(player, context={'request': request}).data)
 
 
 

@@ -1,6 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {View, Text, StyleSheet, Alert} from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import {View, Text, StyleSheet, Alert, Image} from 'react-native';
 import AuthService from '../../services/auth.service';
 import PlayersService from '../../services/players.service';
 import Card from '../../components/Card';
@@ -10,7 +9,7 @@ import Colors from '../../config/colors';
 const PlayerQRScreen = () => {
   const [loading, setLoading] = useState(true);
   const [playerInfo, setPlayerInfo] = useState<any>(null);
-  const [qrData, setQrData] = useState<string>('');
+  const [qrUrl, setQrUrl] = useState<string>('');
 
   useEffect(() => {
     loadPlayerQR();
@@ -20,18 +19,10 @@ const PlayerQRScreen = () => {
     try {
       setLoading(true);
       const user = await AuthService.getCurrentUser();
-      
-      // Get player info
-      const players = await PlayersService.getAllPlayers();
-      const myPlayer = players.find((p: any) => p.name === user.username);
-      
-      if (myPlayer) {
-        setPlayerInfo(myPlayer);
-        // Generate QR data (player ID)
-        setQrData(myPlayer.id.toString());
-      } else {
-        Alert.alert('Error', 'Player information not found');
-      }
+      if (!user) throw new Error('Not authenticated');
+      const myPlayer = await PlayersService.getMyProfile();
+      setPlayerInfo(myPlayer);
+      if (myPlayer?.qr_code_url) setQrUrl(myPlayer.qr_code_url);
     } catch (error: any) {
       Alert.alert('Error', 'Failed to load QR code');
     } finally {
@@ -43,7 +34,7 @@ const PlayerQRScreen = () => {
     return <Loading />;
   }
 
-  if (!qrData) {
+  if (!qrUrl) {
     return (
       <View style={styles.container}>
         <Text style={styles.error}>QR Code not available</Text>
@@ -60,7 +51,7 @@ const PlayerQRScreen = () => {
         </Text>
 
         <View style={styles.qrContainer}>
-          <QRCode value={qrData} size={250} />
+          <Image source={{uri: qrUrl}} style={{width: 250, height: 250}} resizeMode="contain" />
         </View>
 
         <View style={styles.infoSection}>
@@ -69,8 +60,10 @@ const PlayerQRScreen = () => {
         </View>
 
         <View style={styles.infoSection}>
-          <Text style={styles.infoLabel}>Player ID:</Text>
-          <Text style={styles.infoValue}>#{playerInfo?.id}</Text>
+          <Text style={styles.infoLabel}>Sport & Date:</Text>
+          <Text style={styles.infoValue}>
+            {playerInfo?.booking_details?.sport} | {playerInfo?.booking_details?.slot_date}
+          </Text>
         </View>
       </Card>
 
@@ -96,7 +89,7 @@ const PlayerQRScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background.default,
+    backgroundColor: Colors.background,
     padding: 16,
   },
   card: {
@@ -118,7 +111,7 @@ const styles = StyleSheet.create({
   },
   qrContainer: {
     padding: 20,
-    backgroundColor: Colors.background.paper,
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     marginBottom: 24,
   },
