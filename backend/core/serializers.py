@@ -2,15 +2,17 @@
 Serializers for Red Ball Cricket Academy API
 """
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from .models import Sport, TimeSlot, Booking, Player, CheckInLog
+
+User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model"""
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+        fields = ['id', 'email', 'first_name', 'last_name']
         read_only_fields = ['id']
 
 
@@ -185,3 +187,29 @@ class PaymentVerificationSerializer(serializers.Serializer):
     razorpay_payment_id = serializers.CharField()
     razorpay_signature = serializers.CharField()
     booking_id = serializers.IntegerField()
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_current_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('Current password is incorrect')
+        return value
+
+    def validate_new_password(self, value):
+        # add password validators if needed
+        return value
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True)
+

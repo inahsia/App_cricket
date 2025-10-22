@@ -2,6 +2,7 @@
 URL Configuration for Core app
 """
 from django.urls import path, include
+from django.views.generic import TemplateView
 from rest_framework.routers import DefaultRouter
 from . import views
 
@@ -15,9 +16,15 @@ urlpatterns = [
     # Router URLs
     path('', include(router.urls)),
     
+    # Password Reset Page (for email links)
+    path('reset-password/', TemplateView.as_view(template_name='reset_password.html'), name='reset_password_page'),
+    
     # Authentication endpoints
     path('auth/jwt_login/', views.jwt_login, name='jwt_login'),
     path('auth/jwt_register/', views.jwt_register, name='jwt_register'),
+    path('auth/change-password/', views.change_password, name='change_password'),
+    path('auth/password-reset/', views.password_reset_request, name='password_reset_request'),
+    path('auth/password-reset-confirm/', views.password_reset_confirm, name='password_reset_confirm'),
     
     # Payment endpoints
     

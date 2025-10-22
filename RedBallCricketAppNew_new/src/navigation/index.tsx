@@ -7,6 +7,8 @@ import Colors from '../config/colors';
 // Auth Screens
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ResetPasswordConfirmScreen from '../screens/ResetPasswordConfirmScreen';
 
 // User Screens
 import UserHomeScreen from '../screens/user/UserHomeScreen';
@@ -15,6 +17,7 @@ import SlotsListScreen from '../screens/user/SlotsListScreen';
 import BookingScreen from '../screens/user/BookingScreen';
 import MyBookingsScreen from '../screens/user/MyBookingsScreen';
 import PaymentScreen from '../screens/user/PaymentScreen';
+import ChangePasswordScreen from '../screens/user/ChangePasswordScreen';
 
 // Player Screens
 import PlayerDashboardScreen from '../screens/player/PlayerDashboardScreen';
@@ -102,6 +105,16 @@ const Navigation = () => {
           options={{title: 'Create Account'}}
         />
         <Stack.Screen
+          name="ForgotPassword"
+          component={ForgotPasswordScreen}
+          options={{title: 'Forgot Password'}}
+        />
+        <Stack.Screen
+          name="ResetPasswordConfirm"
+          component={ResetPasswordConfirmScreen}
+          options={{title: 'Reset Password'}}
+        />
+        <Stack.Screen
           name="UserTab"
           component={UserTabNavigator}
           options={{headerShown: false}}
@@ -119,6 +132,11 @@ const Navigation = () => {
         <Stack.Screen name="Slots" component={SlotsListScreen} />
         <Stack.Screen name="Booking" component={BookingScreen} />
         <Stack.Screen name="Payment" component={PaymentScreen} />
+        <Stack.Screen 
+          name="ChangePassword" 
+          component={ChangePasswordScreen}
+          options={{title: 'Change Password'}}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

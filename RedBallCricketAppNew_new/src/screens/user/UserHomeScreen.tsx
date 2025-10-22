@@ -90,7 +90,7 @@ const UserHomeScreen = () => {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.welcome}>Welcome back!</Text>
-        <Text style={styles.name}>{user?.username}</Text>
+        <Text style={styles.name}>{user?.email || user?.first_name || 'User'}</Text>
       </View>
 
       <View style={styles.quickActions}>
@@ -113,6 +113,16 @@ const UserHomeScreen = () => {
             <Text style={styles.actionIcon}>📅</Text>
             <Text style={styles.actionTitle}>My Bookings</Text>
             <Text style={styles.actionDesc}>View your bookings</Text>
+          </TouchableOpacity>
+        </Card>
+
+        <Card style={styles.actionCard}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('ChangePassword' as never)}>
+            <Text style={styles.actionIcon}>🔒</Text>
+            <Text style={styles.actionTitle}>Change Password</Text>
+            <Text style={styles.actionDesc}>Update your password</Text>
           </TouchableOpacity>
         </Card>
       </View>

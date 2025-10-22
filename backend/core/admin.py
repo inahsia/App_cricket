@@ -2,7 +2,42 @@
 Admin configuration for Red Ball Cricket Academy
 """
 from django.contrib import admin
-from .models import Sport, TimeSlot, Booking, Player, CheckInLog
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth import get_user_model
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile
+
+User = get_user_model()
+
+
+@admin.register(User)
+class CustomUserAdmin(BaseUserAdmin):
+    """Admin for custom user model"""
+    list_display = ['email', 'first_name', 'last_name', 'is_staff', 'is_active']
+    list_filter = ['is_staff', 'is_active', 'date_joined']
+    search_fields = ['email', 'first_name', 'last_name']
+    ordering = ['-date_joined']
+    
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+    )
+    
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'password1', 'password2', 'first_name', 'last_name', 'is_staff', 'is_active')}
+        ),
+    )
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'user_type', 'created_at']
+    list_filter = ['user_type', 'created_at']
+    search_fields = ['user__email', 'user__first_name', 'user__last_name']
+    raw_id_fields = ['user']
 
 
 @admin.register(Sport)
@@ -26,7 +61,7 @@ class TimeSlotAdmin(admin.ModelAdmin):
 class BookingAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'slot', 'payment_verified', 'is_cancelled', 'created_at']
     list_filter = ['payment_verified', 'is_cancelled', 'created_at']
-    search_fields = ['user__username', 'user__email', 'payment_id', 'order_id']
+    search_fields = ['user__email', 'payment_id', 'order_id']
     readonly_fields = ['created_at', 'updated_at']
     raw_id_fields = ['user', 'slot']
 

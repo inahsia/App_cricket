@@ -18,7 +18,6 @@ import {validateEmail} from '../utils/helpers';
 const RegisterScreen = () => {
   const navigation = useNavigation<any>();
   const [formData, setFormData] = useState({
-    username: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -30,12 +29,6 @@ const RegisterScreen = () => {
 
   const validate = (): boolean => {
     const newErrors: any = {};
-
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
-    } else if (formData.username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
-    }
 
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
@@ -63,7 +56,6 @@ const RegisterScreen = () => {
     setLoading(true);
     try {
       await AuthService.register({
-        username: formData.username,
         email: formData.email,
         password: formData.password,
         first_name: formData.first_name,
@@ -96,15 +88,6 @@ const RegisterScreen = () => {
         <Text style={styles.title}>Create Account</Text>
 
         <View style={styles.form}>
-          <InputField
-            label="Username *"
-            value={formData.username}
-            onChangeText={text => setFormData({...formData, username: text})}
-            error={errors.username}
-            placeholder="Choose a username"
-            autoCapitalize="none"
-          />
-
           <InputField
             label="Email *"
             value={formData.email}

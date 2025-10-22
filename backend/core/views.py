@@ -7,32 +7,52 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.conf import settings
 from django.db import transaction
+from django.views.decorators.csrf import csrf_exempt
 import razorpay
 import hmac
 import hashlib
 import json
 from datetime import datetime, timedelta
 
+User = get_user_model()
+
 from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile
 from .serializers import (
     SportSerializer, TimeSlotSerializer, BookingSerializer, 
     PlayerSerializer, CheckInLogSerializer, UserSerializer,
     BookingCreateSerializer, PlayerCreateSerializer,
-    QRCodeScanSerializer, PaymentOrderSerializer, PaymentVerificationSerializer
+    QRCodeScanSerializer, PaymentOrderSerializer, PaymentVerificationSerializer,
+    PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
 # JWT login endpoint
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def jwt_login(request):
-    username = request.data.get('username')
+    # Allow login with email or username
+    identifier = request.data.get('username') or request.data.get('email')
     password = request.data.get('password')
-    user = authenticate(username=username, password=password)
+    user = None
+    if identifier and password:
+        # CustomUser uses email as USERNAME_FIELD, so authenticate with email
+        user = authenticate(request, email=identifier, password=password)
+        # Fallback: try as username field for backwards compatibility
+        if not user:
+            try:
+                user_obj = User.objects.filter(email__iexact=identifier).first()
+                if user_obj and user_obj.check_password(password):
+                    user = user_obj
+            except Exception:
+                pass
+    
     if user:
         refresh = RefreshToken.for_user(user)
         profile = getattr(user, 'profile', None)
@@ -46,43 +66,104 @@ def jwt_login(request):
         })
     return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
+    if serializer.is_valid():
+        user = request.user
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
+        return Response({'message': 'Password changed successfully'})
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_request(request):
+    serializer = PasswordResetRequestSerializer(data=request.data)
+    if serializer.is_valid():
+        email = serializer.validated_data['email']
+        user = User.objects.filter(email__iexact=email).first()
+        if user:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_link = f"{request.scheme}://{request.get_host()}/api/reset-password/?uid={uid}&token={token}"
+            # send email
+            send_mail(
+                subject='Password Reset Request - Red Ball Cricket Academy',
+                message=f'Hello,\n\nYou requested to reset your password for Red Ball Cricket Academy.\n\nClick the link below to reset your password:\n{reset_link}\n\nThis link will expire in 24 hours.\n\nIf you did not request this, please ignore this email.\n\nBest regards,\nRed Ball Cricket Academy Team',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+        # always return success to avoid leaking emails
+        return Response({'message': 'If an account with that email exists, a reset link has been sent.'})
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request):
+    serializer = PasswordResetConfirmSerializer(data=request.data)
+    if serializer.is_valid():
+        uid = serializer.validated_data['uid']
+        token = serializer.validated_data['token']
+        new_password = serializer.validated_data['new_password']
+        try:
+            uid_decoded = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=uid_decoded)
+        except Exception:
+            return Response({'error': 'Invalid token or uid'}, status=status.HTTP_400_BAD_REQUEST)
+        if not default_token_generator.check_token(user, token):
+            return Response({'error': 'Invalid or expired token'}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        return Response({'message': 'Password has been reset successfully'})
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 # JWT register endpoint
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def jwt_register(request):
-    username = request.data.get('username')
     email = request.data.get('email')
     password = request.data.get('password')
     user_type = request.data.get('user_type', 'customer')
     first_name = request.data.get('first_name', '')
     last_name = request.data.get('last_name', '')
-    if not username or not email or not password:
-        return Response({'error': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
-    if User.objects.filter(username=username).exists():
-        return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not email or not password:
+        return Response({'error': 'Email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
     if User.objects.filter(email=email).exists():
         return Response({'error': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
-    user = User.objects.create_user(
-        username=username,
-        email=email,
-        password=password,
-        first_name=first_name,
-        last_name=last_name
-    )
-    # Set user_type in profile
-    profile = getattr(user, 'profile', None)
-    if profile:
+    
+    try:
+        user = User.objects.create_user(
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
+        
+        # Ensure profile is created (signal should handle this, but double-check)
+        profile, created = UserProfile.objects.get_or_create(user=user)
         profile.user_type = user_type
         profile.save()
-    refresh = RefreshToken.for_user(user)
-    return Response({
-        'message': 'User registered successfully',
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-        'user': UserSerializer(user).data,
-        'user_type': user_type,
-        'is_staff': user.is_staff
-    }, status=status.HTTP_201_CREATED)
+        
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'message': 'User registered successfully',
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user).data,
+            'user_type': user_type,
+            'is_staff': user.is_staff
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # Initialize Razorpay client
@@ -295,11 +376,9 @@ class PlayerViewSet(viewsets.ModelViewSet):
             
             # Create user account for player
             email = serializer.validated_data['email']
-            username = email.split('@')[0] + str(booking_id)
             
             try:
                 user = User.objects.create_user(
-                    username=username,
                     email=email,
                     password='redball',
                     first_name=serializer.validated_data['name']
