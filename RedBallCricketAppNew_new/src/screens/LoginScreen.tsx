@@ -65,12 +65,15 @@ const LoginScreen = () => {
       const response = await AuthService.login({email, password});
       console.log('Login response received:', {
         success: true,
-        hasToken: !!response.token,
+        hasAccessToken: !!response.access,
+        hasRefreshToken: !!response.refresh,
         userData: response.user ? {
           id: response.user.id,
           email: response.user.email,
           isStaff: response.user.is_staff
-        } : null
+        } : null,
+        userType: response.user_type,
+        isStaff: response.is_staff
       });
       
       // Navigate based on user role

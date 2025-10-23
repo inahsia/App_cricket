@@ -11,6 +11,8 @@ router.register(r'sports', views.SportViewSet, basename='sport')
 router.register(r'slots', views.SlotViewSet, basename='timeslot')
 router.register(r'bookings', views.BookingViewSet, basename='booking')
 router.register(r'players', views.PlayerViewSet, basename='player')
+router.register(r'booking-configurations', views.BookingConfigurationViewSet, basename='booking-configuration')
+router.register(r'break-times', views.BreakTimeViewSet, basename='break-time')
 
 urlpatterns = [
     # Router URLs

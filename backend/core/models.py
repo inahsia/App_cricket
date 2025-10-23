@@ -127,6 +127,88 @@ class Sport(models.Model):
         return f"{self.name} - ₹{self.price_per_hour}/hour"
 
 
+class BookingConfiguration(models.Model):
+    """Booking configuration for each sport"""
+    SLOT_DURATION_CHOICES = [
+        (30, '30 minutes'),
+        (60, '1 hour'),
+        (120, '2 hours'),
+        (240, '4 hours'),
+    ]
+    
+    ADVANCE_BOOKING_CHOICES = [
+        (1, '1 day'),
+        (3, '3 days'),
+        (7, '7 days'),
+        (15, '15 days'),
+        (30, '30 days'),
+    ]
+    
+    sport = models.OneToOneField(Sport, on_delete=models.CASCADE, related_name='booking_config')
+    opens_at = models.TimeField(default='06:00')
+    closes_at = models.TimeField(default='22:00')
+    slot_duration = models.IntegerField(choices=SLOT_DURATION_CHOICES, default=60)
+    advance_booking_days = models.IntegerField(choices=ADVANCE_BOOKING_CHOICES, default=7)
+    min_booking_duration = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+    max_booking_duration = models.IntegerField(default=4, validators=[MinValueValidator(1)])
+    buffer_time = models.IntegerField(default=0, validators=[MinValueValidator(0)], help_text="Buffer time in minutes")
+    
+    # Weekend settings
+    different_weekend_timings = models.BooleanField(default=False)
+    weekend_opens_at = models.TimeField(null=True, blank=True)
+    weekend_closes_at = models.TimeField(null=True, blank=True)
+    
+    # Pricing settings
+    peak_hour_pricing = models.BooleanField(default=False)
+    peak_start_time = models.TimeField(null=True, blank=True)
+    peak_end_time = models.TimeField(null=True, blank=True)
+    peak_price_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=1.0)
+    weekend_pricing = models.BooleanField(default=False)
+    weekend_price_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=1.0)
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Booking Configuration'
+        verbose_name_plural = 'Booking Configurations'
+    
+    def __str__(self):
+        return f"Config for {self.sport.name}"
+    
+    @property
+    def total_slots_per_day(self):
+        """Calculate total slots per day"""
+        from datetime import datetime, timedelta
+        opens = datetime.combine(datetime.today(), self.opens_at)
+        closes = datetime.combine(datetime.today(), self.closes_at)
+        duration_minutes = self.slot_duration + self.buffer_time
+        total_minutes = (closes - opens).total_seconds() / 60
+        return int(total_minutes // duration_minutes) if duration_minutes > 0 else 0
+
+
+class BreakTime(models.Model):
+    """Break times when slots cannot be booked"""
+    sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='break_times')
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    reason = models.CharField(max_length=255, default='Break')
+    applies_to_weekdays = models.BooleanField(default=True)
+    applies_to_weekends = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Break Time'
+        verbose_name_plural = 'Break Times'
+        ordering = ['start_time']
+    
+    def __str__(self):
+        return f"{self.sport.name} - {self.start_time} to {self.end_time}"
+
+
 class TimeSlot(models.Model):
     """Time slots for booking"""
     sport = models.ForeignKey(

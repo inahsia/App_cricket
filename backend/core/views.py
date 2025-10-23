@@ -21,13 +21,14 @@ from datetime import datetime, timedelta
 
 User = get_user_model()
 
-from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile, BookingConfiguration, BreakTime
 from .serializers import (
     SportSerializer, TimeSlotSerializer, BookingSerializer, 
     PlayerSerializer, CheckInLogSerializer, UserSerializer,
     BookingCreateSerializer, PlayerCreateSerializer,
     QRCodeScanSerializer, PaymentOrderSerializer, PaymentVerificationSerializer,
-    PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+    PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
+    BookingConfigurationSerializer, BreakTimeSerializer
 )
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -174,15 +175,56 @@ razorpay_client = razorpay.Client(
 
 class SportViewSet(viewsets.ModelViewSet):
     """ViewSet for Sport CRUD operations"""
-    queryset = Sport.objects.filter(is_active=True)
+    queryset = Sport.objects.all()
     serializer_class = SportSerializer
-    permission_classes = [IsAuthenticated]
     
     def get_permissions(self):
-        """Admin can create/update/delete, authenticated users can view"""
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), IsAdminUser()]
-        return [AllowAny()]
+        """Authenticated users can manage, anyone can view"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+    
+    def create(self, request, *args, **kwargs):
+        """Create sport with detailed error logging"""
+        print(f"=== SPORT CREATE ===")
+        print(f"User: {request.user}")
+        print(f"Is Authenticated: {request.user.is_authenticated}")
+        print(f"Auth Header: {request.META.get('HTTP_AUTHORIZATION', 'None')}")
+        print(f"Data: {request.data}")
+        print(f"===================")
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            print(f"Sport CREATE error: {str(e)}")
+            raise
+    
+    def update(self, request, *args, **kwargs):
+        """Update sport with detailed error logging"""
+        print(f"=== SPORT UPDATE ===")
+        print(f"User: {request.user}")
+        print(f"Is Authenticated: {request.user.is_authenticated}")
+        print(f"Auth Header: {request.META.get('HTTP_AUTHORIZATION', 'None')}")
+        print(f"Data: {request.data}")
+        print(f"===================")
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            print(f"Sport UPDATE error: {str(e)}")
+            raise
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update (PATCH) sport with detailed error logging"""
+        print(f"=== SPORT PATCH ===")
+        print(f"User: {request.user}")
+        print(f"Is Authenticated: {request.user.is_authenticated}")
+        print(f"Auth Header: {request.META.get('HTTP_AUTHORIZATION', 'None')}")
+        print(f"Data: {request.data}")
+        print(f"===================")
+        try:
+            return super().partial_update(request, *args, **kwargs)
+        except Exception as e:
+            print(f"Sport PATCH error: {str(e)}")
+            raise
 
     @action(detail=True, methods=['get'])
     def available_slots(self, request, pk=None):
@@ -597,3 +639,102 @@ def dashboard_stats(request):
     }
     
     return Response(stats)
+
+
+class BookingConfigurationViewSet(viewsets.ModelViewSet):
+    """ViewSet for BookingConfiguration"""
+    queryset = BookingConfiguration.objects.all().order_by('id')
+    serializer_class = BookingConfigurationSerializer
+    
+    def get_permissions(self):
+        """Authenticated users can manage, anyone can view"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+    
+    def create(self, request, *args, **kwargs):
+        """Create booking config with detailed error logging"""
+        print(f"=== BOOKING CONFIG CREATE ===")
+        print(f"User: {request.user}")
+        print(f"Is Authenticated: {request.user.is_authenticated}")
+        print(f"Auth Header: {request.META.get('HTTP_AUTHORIZATION', 'None')}")
+        print(f"Data: {request.data}")
+        print(f"============================")
+        try:
+            sport_id = request.data.get('sport')
+            
+            # Check if config already exists for this sport
+            if sport_id:
+                existing = BookingConfiguration.objects.filter(sport_id=sport_id).first()
+                if existing:
+                    print(f"⚠️ Booking config already exists for sport {sport_id}, returning existing config")
+                    serializer = self.get_serializer(existing)
+                    return Response(serializer.data, status=status.HTTP_200_OK)
+            
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                print(f"❌ VALIDATION ERRORS: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            print(f"❌ BookingConfig CREATE error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        """Update booking config with detailed error logging"""
+        print(f"=== BOOKING CONFIG UPDATE ===")
+        print(f"User: {request.user}")
+        print(f"Is Authenticated: {request.user.is_authenticated}")
+        print(f"Auth Header: {request.META.get('HTTP_AUTHORIZATION', 'None')}")
+        print(f"Data: {request.data}")
+        print(f"============================")
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            print(f"BookingConfig UPDATE error: {str(e)}")
+            raise
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update (PATCH) booking config with detailed error logging"""
+        print(f"=== BOOKING CONFIG PATCH ===")
+        print(f"User: {request.user}")
+        print(f"Is Authenticated: {request.user.is_authenticated}")
+        print(f"Auth Header: {request.META.get('HTTP_AUTHORIZATION', 'None')}")
+        print(f"Data: {request.data}")
+        print(f"============================")
+        try:
+            return super().partial_update(request, *args, **kwargs)
+        except Exception as e:
+            print(f"BookingConfig PATCH error: {str(e)}")
+            raise
+    
+    def get_queryset(self):
+        """Filter by sport if provided"""
+        queryset = BookingConfiguration.objects.all()
+        sport_id = self.request.query_params.get('sport', None)
+        if sport_id:
+            queryset = queryset.filter(sport_id=sport_id)
+        return queryset
+
+
+class BreakTimeViewSet(viewsets.ModelViewSet):
+    """ViewSet for BreakTime"""
+    queryset = BreakTime.objects.all()
+    serializer_class = BreakTimeSerializer
+    
+    def get_permissions(self):
+        """Authenticated users can manage, anyone can view"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+    
+    def get_queryset(self):
+        """Filter by sport if provided"""
+        queryset = BreakTime.objects.all()
+        sport_id = self.request.query_params.get('sport', None)
+        if sport_id:
+            queryset = queryset.filter(sport_id=sport_id)
+        return queryset

@@ -15,8 +15,18 @@ import { AdminService } from '../../services/admin.service';
 import { formatDate, formatTime, formatCurrency } from '../../utils/helpers';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { Booking } from '../../types';
+import { useRoute, RouteProp } from '@react-navigation/native';
+
+type AllBookingsRouteParams = {
+  AllBookings: {
+    sportId?: number;
+    sportName?: string;
+  };
+};
 
 const AllBookingsScreen = () => {
+  const route = useRoute<RouteProp<AllBookingsRouteParams, 'AllBookings'>>();
+  const { sportId, sportName } = route.params || {};
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -29,7 +39,17 @@ const AllBookingsScreen = () => {
     try {
       setLoading(true);
       const response = await AdminService.getAllBookings();
-      setBookings(Array.isArray(response) ? response : []);
+      const allBookings = Array.isArray(response) ? response : [];
+      
+      // Filter by sport if sportId is provided
+      if (sportId) {
+        const filtered = allBookings.filter(
+          (booking: Booking) => booking.slot_details?.sport === sportId
+        );
+        setBookings(filtered);
+      } else {
+        setBookings(allBookings);
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to load bookings');
       setBookings([]);
@@ -166,7 +186,14 @@ const AllBookingsScreen = () => {
   }
 
   return (
-    <FlatList
+    <View style={styles.container}>
+      {sportName && (
+        <View style={styles.filterHeader}>
+          <Icon name="filter" size={16} color={Colors.primary} />
+          <Text style={styles.filterText}>Showing bookings for: {sportName}</Text>
+        </View>
+      )}
+      <FlatList
       style={styles.container}
       data={bookings || []}
       renderItem={renderItem}
@@ -180,6 +207,7 @@ const AllBookingsScreen = () => {
         </View>
       }
     />
+    </View>
   );
 };
 
@@ -187,6 +215,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background.default,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary + '15',
+    padding: 12,
+    gap: 8,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   bookingCard: {
     margin: 16,

@@ -55,11 +55,30 @@ export const AuthService = {
         }
       );
       
-  console.log('Login successful:', response);
+      console.log('✅ Login successful - Full Response:', response);
+      console.log('Access Token:', response.access ? 'PRESENT' : '❌ MISSING');
+      console.log('User:', response.user);
       
       if (response.access) {
+        console.log('💾 Saving token to storage...');
+        console.log('Token to save:', response.access.substring(0, 50) + '...');
+        
         await StorageService.setAuthToken(response.access);
+        console.log('✅ Token saved');
+        
+        // Immediate verification
+        const savedToken = await StorageService.getAuthToken();
+        console.log('� Immediate verification - Token retrieved:', savedToken ? savedToken.substring(0, 50) + '...' : 'NULL');
+        
+        if (!savedToken) {
+          console.error('❌ CRITICAL: Token was NOT saved to AsyncStorage!');
+          throw new Error('Failed to save authentication token');
+        }
+        
+        console.log('�💾 Saving user data...');
         await StorageService.setUserData(response.user);
+        console.log('✅ User data saved');
+        
         // Determine role from response
         let role: 'admin' | 'user' | 'player' = 'user';
         if (response.is_staff || (response.user && response.user.is_staff)) {
@@ -67,7 +86,21 @@ export const AuthService = {
         } else if (response.user_type === 'player') {
           role = 'player';
         }
+        
+        console.log('💾 Saving user role:', role);
         await StorageService.setUserRole(role);
+        console.log('✅ User role saved');
+        
+        // Final verification
+        const finalToken = await StorageService.getAuthToken();
+        const finalUser = await StorageService.getUserData();
+        const finalRole = await StorageService.getUserRole();
+        console.log('🔍 Final Verification:');
+        console.log('  - Token:', finalToken ? 'YES ✅' : 'NO ❌');
+        console.log('  - User:', finalUser ? 'YES ✅' : 'NO ❌');
+        console.log('  - Role:', finalRole || 'NONE');
+      } else {
+        console.error('❌ NO ACCESS TOKEN IN RESPONSE!');
       }
       
       return response;

@@ -3,6 +3,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import AdminDashboard from '../screens/admin/AdminDashboard';
 import AdminBookingHistory from '../screens/admin/AdminBookingHistory';
 import SportsManagement from '../screens/admin/SportsManagement';
+import AllBookingsScreen from '../screens/admin/AllBookingsScreen';
+import ManageSlotsScreen from '../screens/admin/ManageSlotsScreen';
 
 const Stack = createStackNavigator();
 
@@ -16,6 +18,16 @@ const AdminNavigator = () => {
       <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
       <Stack.Screen name="BookingHistory" component={AdminBookingHistory} />
       <Stack.Screen name="SportsManagement" component={SportsManagement} />
+      <Stack.Screen 
+        name="AllBookings" 
+        component={AllBookingsScreen}
+        options={{ title: 'Manage Bookings' }}
+      />
+      <Stack.Screen 
+        name="ManageSlots" 
+        component={ManageSlotsScreen}
+        options={{ title: 'Manage Slots' }}
+      />
     </Stack.Navigator>
   );
 };

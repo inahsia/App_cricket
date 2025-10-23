@@ -3,7 +3,7 @@ Serializers for Red Ball Cricket Academy API
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Sport, TimeSlot, Booking, Player, CheckInLog
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, BookingConfiguration, BreakTime
 
 User = get_user_model()
 
@@ -14,6 +14,67 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'first_name', 'last_name']
         read_only_fields = ['id']
+
+
+class BookingConfigurationSerializer(serializers.ModelSerializer):
+    """Serializer for BookingConfiguration model"""
+    sport_name = serializers.CharField(source='sport.name', read_only=True)
+    total_slots_per_day = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = BookingConfiguration
+        fields = ['id', 'sport', 'sport_name', 'opens_at', 'closes_at', 'slot_duration', 
+                  'advance_booking_days', 'min_booking_duration', 'max_booking_duration', 
+                  'buffer_time', 'different_weekend_timings', 'weekend_opens_at', 'weekend_closes_at',
+                  'peak_hour_pricing', 'peak_start_time', 'peak_end_time', 'peak_price_multiplier',
+                  'weekend_pricing', 'weekend_price_multiplier', 'is_active', 'total_slots_per_day',
+                  'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        """Validate booking configuration data"""
+        # Convert decimal strings to Decimal
+        from decimal import Decimal
+        
+        if 'peak_price_multiplier' in data and isinstance(data['peak_price_multiplier'], str):
+            try:
+                data['peak_price_multiplier'] = Decimal(data['peak_price_multiplier'])
+            except (ValueError, TypeError):
+                raise serializers.ValidationError({'peak_price_multiplier': 'Invalid decimal format'})
+        
+        if 'weekend_price_multiplier' in data and isinstance(data['weekend_price_multiplier'], str):
+            try:
+                data['weekend_price_multiplier'] = Decimal(data['weekend_price_multiplier'])
+            except (ValueError, TypeError):
+                raise serializers.ValidationError({'weekend_price_multiplier': 'Invalid decimal format'})
+        
+        # Validate weekend timings if enabled
+        if data.get('different_weekend_timings'):
+            if not data.get('weekend_opens_at') or not data.get('weekend_closes_at'):
+                raise serializers.ValidationError(
+                    'Weekend opening and closing times are required when different weekend timings is enabled'
+                )
+        
+        # Validate peak hour pricing if enabled
+        if data.get('peak_hour_pricing'):
+            if not data.get('peak_start_time') or not data.get('peak_end_time'):
+                raise serializers.ValidationError(
+                    'Peak start and end times are required when peak hour pricing is enabled'
+                )
+        
+        return data
+
+
+class BreakTimeSerializer(serializers.ModelSerializer):
+    """Serializer for BreakTime model"""
+    sport_name = serializers.CharField(source='sport.name', read_only=True)
+    
+    class Meta:
+        model = BreakTime
+        fields = ['id', 'sport', 'sport_name', 'start_time', 'end_time', 'reason',
+                  'applies_to_weekdays', 'applies_to_weekends', 'is_active', 
+                  'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class SportSerializer(serializers.ModelSerializer):
@@ -28,6 +89,21 @@ class SportSerializer(serializers.ModelSerializer):
 
     def get_available_slots_count(self, obj):
         return obj.slots.filter(is_booked=False).count()
+    
+    def validate_price_per_hour(self, value):
+        """Ensure price_per_hour is a valid decimal"""
+        if value is None or value == '':
+            raise serializers.ValidationError("Price per hour is required")
+        try:
+            # Convert to Decimal if it's a string
+            from decimal import Decimal
+            if isinstance(value, str):
+                value = Decimal(value)
+            if value < 0:
+                raise serializers.ValidationError("Price must be 0 or greater")
+            return value
+        except (ValueError, TypeError):
+            raise serializers.ValidationError("Invalid price format")
 
 
 class TimeSlotSerializer(serializers.ModelSerializer):

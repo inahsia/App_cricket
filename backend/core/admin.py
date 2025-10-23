@@ -4,7 +4,7 @@ Admin configuration for Red Ball Cricket Academy
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
-from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile, BookingConfiguration, BreakTime
 
 User = get_user_model()
 
@@ -82,3 +82,21 @@ class CheckInLogAdmin(admin.ModelAdmin):
     search_fields = ['player__name', 'player__email']
     readonly_fields = ['timestamp']
     raw_id_fields = ['player']
+
+
+@admin.register(BookingConfiguration)
+class BookingConfigurationAdmin(admin.ModelAdmin):
+    list_display = ['sport', 'opens_at', 'closes_at', 'slot_duration', 'advance_booking_days', 'is_active']
+    list_filter = ['is_active', 'slot_duration', 'advance_booking_days']
+    search_fields = ['sport__name']
+    readonly_fields = ['created_at', 'updated_at', 'total_slots_per_day']
+    raw_id_fields = ['sport']
+
+
+@admin.register(BreakTime)
+class BreakTimeAdmin(admin.ModelAdmin):
+    list_display = ['sport', 'start_time', 'end_time', 'reason', 'applies_to_weekdays', 'applies_to_weekends', 'is_active']
+    list_filter = ['is_active', 'applies_to_weekdays', 'applies_to_weekends']
+    search_fields = ['sport__name', 'reason']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['sport']

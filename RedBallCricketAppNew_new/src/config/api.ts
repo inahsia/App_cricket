@@ -47,6 +47,11 @@ export const API_ENDPOINTS = {
   // Dashboard
   DASHBOARD_STATS: '/dashboard/stats/',
 
+  // Booking Configuration
+  BOOKING_CONFIG: '/booking-configurations/',
+  BREAK_TIMES: '/break-times/',
+  BLACKOUT_DATES: '/blackout-dates/',
+
   // Admin Endpoints (use same endpoints as regular users, backend handles permissions)
   ADMIN_BOOKINGS: '/bookings/',
   ADMIN_SPORTS: '/sports/',
