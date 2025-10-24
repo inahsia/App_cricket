@@ -21,14 +21,14 @@ from datetime import datetime, timedelta
 
 User = get_user_model()
 
-from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile, BookingConfiguration, BreakTime
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile, BookingConfiguration, BreakTime, BlackoutDate
 from .serializers import (
     SportSerializer, TimeSlotSerializer, BookingSerializer, 
     PlayerSerializer, CheckInLogSerializer, UserSerializer,
     BookingCreateSerializer, PlayerCreateSerializer,
     QRCodeScanSerializer, PaymentOrderSerializer, PaymentVerificationSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
-    BookingConfigurationSerializer, BreakTimeSerializer
+    BookingConfigurationSerializer, BreakTimeSerializer, BlackoutDateSerializer
 )
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -277,18 +277,174 @@ class SlotViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
-        """Create multiple slots at once (Admin only)"""
+        """Create multiple slots at once based on booking configuration (Admin only)"""
         if not request.user.is_staff:
             return Response(
                 {'error': 'Admin access required'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        serializer = TimeSlotSerializer(data=request.data, many=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from datetime import datetime, timedelta
+            from decimal import Decimal
+            
+            # Get parameters
+            sport_id = request.data.get('sport')
+            start_date_str = request.data.get('start_date')
+            end_date_str = request.data.get('end_date')
+            
+            # Manual time slots (optional)
+            manual_time_slots = request.data.get('time_slots', [])
+            
+            # Booking config details (optional - for automatic generation)
+            opens_at = request.data.get('opens_at')
+            closes_at = request.data.get('closes_at')
+            slot_duration = request.data.get('slot_duration', 60)  # default 60 minutes
+            buffer_time = request.data.get('buffer_time', 0)
+            weekend_opens_at = request.data.get('weekend_opens_at')
+            weekend_closes_at = request.data.get('weekend_closes_at')
+            
+            if not all([sport_id, start_date_str, end_date_str]):
+                return Response(
+                    {'error': 'sport, start_date, and end_date are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get sport
+            try:
+                sport = Sport.objects.get(id=sport_id)
+            except Sport.DoesNotExist:
+                return Response(
+                    {'error': 'Sport not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Parse dates
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            
+            created_slots = []
+            current_date = start_date
+            
+            while current_date <= end_date:
+                # Check if it's a blackout date
+                if BlackoutDate.objects.filter(sport=sport, date=current_date).exists():
+                    current_date += timedelta(days=1)
+                    continue
+                
+                # Determine operating hours for this date
+                is_weekend = current_date.weekday() >= 5  # Saturday=5, Sunday=6
+                
+                if is_weekend and weekend_opens_at and weekend_closes_at:
+                    day_opens_at = weekend_opens_at
+                    day_closes_at = weekend_closes_at
+                elif opens_at and closes_at:
+                    day_opens_at = opens_at
+                    day_closes_at = closes_at
+                else:
+                    # Use manual time slots if no config provided
+                    if manual_time_slots:
+                        for slot_data in manual_time_slots:
+                            start_time_str = slot_data.get('start_time')
+                            end_time_str = slot_data.get('end_time')
+                            
+                            if start_time_str and end_time_str:
+                                try:
+                                    start_time = datetime.strptime(start_time_str, '%H:%M:%S').time()
+                                except ValueError:
+                                    start_time = datetime.strptime(start_time_str, '%H:%M').time()
+                                
+                                try:
+                                    end_time = datetime.strptime(end_time_str, '%H:%M:%S').time()
+                                except ValueError:
+                                    end_time = datetime.strptime(end_time_str, '%H:%M').time()
+                                
+                                # Check if slot already exists
+                                if not TimeSlot.objects.filter(
+                                    sport=sport,
+                                    date=current_date,
+                                    start_time=start_time,
+                                    end_time=end_time
+                                ).exists():
+                                    slot = TimeSlot.objects.create(
+                                        sport=sport,
+                                        date=current_date,
+                                        start_time=start_time,
+                                        end_time=end_time,
+                                        price=sport.price_per_hour,
+                                        max_players=sport.max_players
+                                    )
+                                    created_slots.append(slot)
+                    
+                    current_date += timedelta(days=1)
+                    continue
+                
+                # Generate slots automatically based on config
+                try:
+                    # Try parsing with seconds first (HH:MM:SS)
+                    start_time = datetime.strptime(day_opens_at, '%H:%M:%S').time()
+                except ValueError:
+                    # Fallback to parsing without seconds (HH:MM)
+                    start_time = datetime.strptime(day_opens_at, '%H:%M').time()
+                
+                try:
+                    end_time = datetime.strptime(day_closes_at, '%H:%M:%S').time()
+                except ValueError:
+                    end_time = datetime.strptime(day_closes_at, '%H:%M').time()
+                
+                # Convert to datetime for calculations
+                current_slot_start = datetime.combine(current_date, start_time)
+                day_end = datetime.combine(current_date, end_time)
+                
+                while current_slot_start < day_end:
+                    # Calculate slot end time
+                    current_slot_end = current_slot_start + timedelta(minutes=slot_duration)
+                    
+                    # Don't create slot if it goes beyond closing time
+                    if current_slot_end.time() > end_time:
+                        break
+                    
+                    # Check if slot already exists
+                    if not TimeSlot.objects.filter(
+                        sport=sport,
+                        date=current_date,
+                        start_time=current_slot_start.time(),
+                        end_time=current_slot_end.time()
+                    ).exists():
+                        slot = TimeSlot.objects.create(
+                            sport=sport,
+                            date=current_date,
+                            start_time=current_slot_start.time(),
+                            end_time=current_slot_end.time(),
+                            price=sport.price_per_hour,
+                            max_players=sport.max_players
+                        )
+                        created_slots.append(slot)
+                    
+                    # Move to next slot (including buffer time)
+                    current_slot_start = current_slot_end + timedelta(minutes=buffer_time)
+                
+                current_date += timedelta(days=1)
+            
+            # Serialize created slots
+            serializer = TimeSlotSerializer(created_slots, many=True)
+            
+            return Response({
+                'message': f'Successfully created {len(created_slots)} slots',
+                'created_count': len(created_slots),
+                'slots': serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            import traceback
+            print(f"Error in bulk_create: {str(e)}")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Traceback: {traceback.format_exc()}")
+            print(f"Request data: {request.data}")
+            return Response(
+                {'error': f'Failed to create slots: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class BookingViewSet(viewsets.ModelViewSet):
@@ -738,3 +894,36 @@ class BreakTimeViewSet(viewsets.ModelViewSet):
         if sport_id:
             queryset = queryset.filter(sport_id=sport_id)
         return queryset
+
+
+class BlackoutDateViewSet(viewsets.ModelViewSet):
+    """ViewSet for BlackoutDate - date-based unavailability"""
+    queryset = BlackoutDate.objects.all()
+    serializer_class = BlackoutDateSerializer
+    
+    def get_permissions(self):
+        """Authenticated users can manage, anyone can view"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+    
+    def get_queryset(self):
+        """Filter by sport and/or date range"""
+        queryset = BlackoutDate.objects.all().order_by('date')
+        
+        # Filter by sport
+        sport_id = self.request.query_params.get('sport', None)
+        if sport_id:
+            queryset = queryset.filter(sport_id=sport_id)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date', None)
+        end_date = self.request.query_params.get('end_date', None)
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        
+        logger.info(f"BlackoutDate queryset: sport={sport_id}, start={start_date}, end={end_date}, count={queryset.count()}")
+        return queryset
+

@@ -4,7 +4,7 @@ import AdminDashboard from '../screens/admin/AdminDashboard';
 import AdminBookingHistory from '../screens/admin/AdminBookingHistory';
 import SportsManagement from '../screens/admin/SportsManagement';
 import AllBookingsScreen from '../screens/admin/AllBookingsScreen';
-import ManageSlotsScreen from '../screens/admin/ManageSlotsScreen';
+import ManageSlotsScreenEnhanced from '../screens/admin/ManageSlotsScreen_Enhanced';
 
 const Stack = createStackNavigator();
 
@@ -25,7 +25,7 @@ const AdminNavigator = () => {
       />
       <Stack.Screen 
         name="ManageSlots" 
-        component={ManageSlotsScreen}
+        component={ManageSlotsScreenEnhanced}
         options={{ title: 'Manage Slots' }}
       />
     </Stack.Navigator>

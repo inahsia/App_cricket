@@ -81,21 +81,44 @@ const BookingConfigService = {
   async getBookingConfig(sportId: number): Promise<BookingConfig | null> {
     try {
       if (__DEV__) {
-        console.log('Fetching booking config for sport:', sportId);
+        console.log('🔍 Fetching booking config for sport:', sportId);
       }
-      const response = await ApiService.get<BookingConfig[]>(
+      const response = await ApiService.get<any>(
         `${API_ENDPOINTS.BOOKING_CONFIG}?sport=${sportId}`
       );
       
-      // Get the first config for the sport
-      const config = response?.[0];
+      if (__DEV__) {
+        console.log('📦 Raw API response:', response);
+        console.log('📦 Response type:', typeof response);
+        console.log('📦 Is array:', Array.isArray(response));
+        console.log('📦 Response keys:', response ? Object.keys(response) : 'null');
+      }
+      
+      // Handle different response formats
+      let configs: BookingConfig[] = [];
+      
+      if (Array.isArray(response)) {
+        configs = response;
+      } else if (response && Array.isArray(response.results)) {
+        configs = response.results;
+      } else if (response && typeof response === 'object') {
+        // Single object response
+        configs = [response];
+      }
+      
+      const config = configs.length > 0 ? configs[0] : null;
       
       if (__DEV__) {
-        console.log('Booking config response:', config);
+        console.log('📋 Parsed configs array:', configs);
+        console.log('📋 Selected config:', config);
       }
-      return config || null;
+      
+      return config;
     } catch (error: any) {
-      console.log('No booking config found for sport:', sportId);
+      if (__DEV__) {
+        console.log('❌ Error fetching booking config for sport:', sportId);
+        console.log('❌ Error details:', error.response?.data || error.message);
+      }
       // Return null instead of throwing when config doesn't exist
       if (error.response?.status === 404 || !error.response) {
         return null;

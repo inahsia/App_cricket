@@ -13,6 +13,7 @@ router.register(r'bookings', views.BookingViewSet, basename='booking')
 router.register(r'players', views.PlayerViewSet, basename='player')
 router.register(r'booking-configurations', views.BookingConfigurationViewSet, basename='booking-configuration')
 router.register(r'break-times', views.BreakTimeViewSet, basename='break-time')
+router.register(r'blackout-dates', views.BlackoutDateViewSet, basename='blackout-date')
 
 urlpatterns = [
     # Router URLs

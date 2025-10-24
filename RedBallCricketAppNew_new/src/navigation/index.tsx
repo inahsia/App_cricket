@@ -26,7 +26,7 @@ import PlayerQRScreen from '../screens/player/PlayerQRScreen';
 // Admin Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import ManageSportsScreen from '../screens/admin/ManageSportsScreen';
-import ManageSlotsScreen from '../screens/admin/ManageSlotsScreen';
+import ManageSlotsScreenEnhanced from '../screens/admin/ManageSlotsScreen_Enhanced';
 import QRScannerScreen from '../screens/admin/QRScannerScreen';
 import AllBookingsScreen from '../screens/admin/AllBookingsScreen';
 
@@ -78,7 +78,7 @@ const AdminTabNavigator = () => {
       }}>
       <Tab.Screen name="Dashboard" component={AdminDashboardScreen} />
       <Tab.Screen name="Sports" component={ManageSportsScreen} />
-      <Tab.Screen name="Slots" component={ManageSlotsScreen} />
+      <Tab.Screen name="Slots" component={ManageSlotsScreenEnhanced} />
       <Tab.Screen name="Bookings" component={AllBookingsScreen} />
       <Tab.Screen name="Scanner" component={QRScannerScreen} />
     </Tab.Navigator>

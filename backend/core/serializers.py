@@ -3,7 +3,7 @@ Serializers for Red Ball Cricket Academy API
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Sport, TimeSlot, Booking, Player, CheckInLog, BookingConfiguration, BreakTime
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, BookingConfiguration, BreakTime, BlackoutDate
 
 User = get_user_model()
 
@@ -75,6 +75,16 @@ class BreakTimeSerializer(serializers.ModelSerializer):
                   'applies_to_weekdays', 'applies_to_weekends', 'is_active', 
                   'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class BlackoutDateSerializer(serializers.ModelSerializer):
+    """Serializer for BlackoutDate model"""
+    sport_name = serializers.CharField(source='sport.name', read_only=True)
+    
+    class Meta:
+        model = BlackoutDate
+        fields = ['id', 'sport', 'sport_name', 'date', 'reason', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
 
 class SportSerializer(serializers.ModelSerializer):

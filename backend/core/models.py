@@ -209,6 +209,23 @@ class BreakTime(models.Model):
         return f"{self.sport.name} - {self.start_time} to {self.end_time}"
 
 
+class BlackoutDate(models.Model):
+    """Dates when a sport is completely unavailable"""
+    sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='blackout_dates')
+    date = models.DateField()
+    reason = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Blackout Date'
+        verbose_name_plural = 'Blackout Dates'
+        ordering = ['date']
+        unique_together = ['sport', 'date']
+    
+    def __str__(self):
+        return f"{self.sport.name} - {self.date} ({self.reason})"
+
+
 class TimeSlot(models.Model):
     """Time slots for booking"""
     sport = models.ForeignKey(
