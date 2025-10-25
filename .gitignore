@@ -1,65 +1,143 @@
-# Node
-node_modules/
+# ===== NODE / NPM =====
+**/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 package-lock.json
+yarn.lock
 .yarn-integrity
+.pnp.*
+.yarn/
+
+# ===== REACT NATIVE =====
+# Metro bundler cache
+.metro-health-check*
 .expo/
 .expo-shared/
 
-# React Native Android
-android/.gradle/
-android/.idea/
-android/local.properties
-android/app/build/
-android/build/
+# React Native debugger
+.flipper/
+
+# Android
+**/android/.gradle/
+**/android/.idea/
+**/android/local.properties
+**/android/app/build/
+**/android/build/
+**/android/gradle.properties
+**/android/keystore.properties
 *.keystore
 *.jks
+**/android/app/release/
+**/android/app/debug/
 
-# React Native iOS
-ios/Pods/
-ios/DerivedData/
-ios/build/
-*.xcworkspace
-*.xcuserdata/
+# iOS
+**/ios/Pods/
+**/ios/DerivedData/
+**/ios/build/
+**/ios/*.xcworkspace
+**/ios/*.xcuserdata/
+**/ios/*.xcuserstate
+**/ios/Podfile.lock
+
+# Xcode
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
 *.xcuserstate
+project.xcworkspace/
+xcuserdata/
 
-# Metro / Bundler
-.expo
+# ===== PYTHON / DJANGO =====
+# Virtual environments
+**/venv/
+**/.venv/
+**/env/
+**/.env/
+**/ENV/
+**/.ENV/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/*.so
+**/.pytest_cache/
+**/.coverage
+**/.tox/
+**/.cache
+**/htmlcov/
+
+# Django specific
+**/db.sqlite3
+**/db.sqlite3-journal
+**/staticfiles/
+**/media/
+**/static/
+**/migrations/__pycache__/
+**/settings_local.py
+**/local_settings.py
+
+# ===== ENVIRONMENT & CONFIG =====
+.env
+.env.*
+!.env.example
+config.json
+secrets.json
+
+# ===== IDE / EDITORS =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS GENERATED =====
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===== BUILD / DIST =====
 dist/
 build/
 coverage/
+.nyc_output/
+.sourcemaps/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# VSCode
-.vscode/
-
-# Env
-.env
-.env.*
-
-# Logs
+# ===== LOGS =====
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# Python
-backend/venv/
-backend/.venv/
-backend/__pycache__/
-backend/**/*.pyc
-backend/.pytest_cache/
-
-# Django
-backend/db.sqlite3
-backend/staticfiles/
-backend/media/
-
-# Misc
+# ===== TEMPORARY =====
 .tmp/
 .temp/
-.idea/
-.sourcemaps/
+*.tmp
+*.temp
+
+# ===== BACKUP FILES =====
+*_backup/
+*_old/
+*.backup
+*.bak
+
+# ===== SPECIFIC TO YOUR PROJECT =====
+# QR Code images (optional - remove if you want to commit them)
+backend/media/qr_codes/
+
+# App-specific configs
+RedBallCricketAppNew_new/
+**/node_modules_backup/
+**/*_broken.tsx
+**/*_old.tsx

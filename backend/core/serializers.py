@@ -235,6 +235,36 @@ class PlayerCreateSerializer(serializers.ModelSerializer):
         return value.lower()
 
 
+class BulkPlayerCreateSerializer(serializers.Serializer):
+    """Serializer for bulk player creation via add_players endpoint"""
+    players = serializers.ListField(
+        child=serializers.DictField(
+            child=serializers.CharField()
+        ),
+        min_length=1
+    )
+    
+    def validate_players(self, value):
+        """Validate each player has required fields"""
+        for player_data in value:
+            if 'name' not in player_data or not player_data['name'].strip():
+                raise serializers.ValidationError("Each player must have a 'name'")
+            if 'email' not in player_data or not player_data['email'].strip():
+                raise serializers.ValidationError("Each player must have an 'email'")
+            
+            # Validate email format
+            email = player_data['email'].strip().lower()
+            try:
+                from django.core.validators import validate_email
+                validate_email(email)
+            except:
+                raise serializers.ValidationError(f"Invalid email format: {email}")
+            
+            player_data['email'] = email  # Normalize email
+        
+        return value
+
+
 class CheckInLogSerializer(serializers.ModelSerializer):
     """Serializer for CheckInLog model"""
     player_name = serializers.CharField(source='player.name', read_only=True)

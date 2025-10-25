@@ -304,14 +304,15 @@ class Booking(models.Model):
     status = models.CharField(max_length=20, default='pending')
     def save(self, *args, **kwargs):
         # Automatically update status based on payment_verified and cancellation
-        if self.payment_verified:
-            self.status = 'confirmed'
-        elif self.is_cancelled:
+        # Check cancellation first - cancelled bookings should stay cancelled
+        if self.is_cancelled:
             self.status = 'cancelled'
             # Free up the slot when booking is cancelled
             if self.slot and self.slot.is_booked:
                 self.slot.is_booked = False
                 self.slot.save()
+        elif self.payment_verified:
+            self.status = 'confirmed'
         else:
             self.status = 'pending'
         super().save(*args, **kwargs)

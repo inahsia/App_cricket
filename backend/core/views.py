@@ -21,11 +21,11 @@ from datetime import datetime, timedelta
 
 User = get_user_model()
 
-from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile, BookingConfiguration, BreakTime, BlackoutDate
+from .models import Sport, TimeSlot, Booking, Player, CheckInLog, UserProfile, BookingConfiguration, BreakTime, BlackoutDate, CustomUser
 from .serializers import (
     SportSerializer, TimeSlotSerializer, BookingSerializer, 
     PlayerSerializer, CheckInLogSerializer, UserSerializer,
-    BookingCreateSerializer, PlayerCreateSerializer,
+    BookingCreateSerializer, PlayerCreateSerializer, BulkPlayerCreateSerializer,
     QRCodeScanSerializer, PaymentOrderSerializer, PaymentVerificationSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
     BookingConfigurationSerializer, BreakTimeSerializer, BlackoutDateSerializer
@@ -668,6 +668,103 @@ class BookingViewSet(viewsets.ModelViewSet):
         players = booking.players.all()
         serializer = PlayerSerializer(players, many=True, context={'request': request})
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='add_players')
+    def add_players(self, request, pk=None):
+        """Add multiple players to a booking
+        POST /api/bookings/<id>/add_players/
+        Body: {"players": [{"name": "John", "email": "john@example.com"}, ...]}
+        """
+        booking = self.get_object()
+        
+        # Verify booking belongs to user
+        if booking.user != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'You do not have permission to add players to this booking'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check payment verification
+        if not booking.payment_verified:
+            return Response(
+                {'error': 'Payment must be verified before adding players'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate input data
+        serializer = BulkPlayerCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        players_data = serializer.validated_data['players']
+        
+        # Check player limits
+        max_allowed = booking.slot.max_players or booking.slot.sport.max_players
+        current_count = booking.players.count()
+        available_slots = max_allowed - current_count
+        
+        if len(players_data) > available_slots:
+            return Response({
+                'error': f'Cannot add {len(players_data)} players. Only {available_slots} slots available.',
+                'max_allowed': max_allowed,
+                'current_players': current_count,
+                'available_slots': available_slots
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create players
+        created_players = []
+        
+        with transaction.atomic():
+            for player_data in players_data:
+                name = player_data['name'].strip()
+                email = player_data['email'].strip().lower()
+                phone = player_data.get('phone', '').strip()
+                
+                # Check for duplicate emails in this booking
+                if booking.players.filter(email=email).exists():
+                    return Response({
+                        'error': f'Player with email {email} already exists in this booking'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Create or get user with email as username and "redball" as password
+                user, user_created = CustomUser.objects.get_or_create(
+                    email=email,
+                    defaults={
+                        'first_name': name,
+                    }
+                )
+                
+                if user_created:
+                    user.set_password('redball')
+                    user.save()
+                    
+                    # Set user profile as player type
+                    profile, _ = UserProfile.objects.get_or_create(user=user)
+                    profile.user_type = 'player'
+                    profile.save()
+                
+                # Create player
+                player = Player.objects.create(
+                    booking=booking,
+                    name=name,
+                    email=email,
+                    phone=phone,
+                    user=user
+                )
+                created_players.append(player)
+        
+        # Return created players
+        response_serializer = PlayerSerializer(
+            created_players, 
+            many=True, 
+            context={'request': request}
+        )
+        
+        return Response({
+            'success': True,
+            'message': f'Successfully added {len(created_players)} players',
+            'players': response_serializer.data
+        }, status=status.HTTP_201_CREATED)
 
 
 class PlayerViewSet(viewsets.ModelViewSet):
