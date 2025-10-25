@@ -260,7 +260,19 @@ class TimeSlot(models.Model):
 
     def is_available(self):
         """Check if slot is available for booking"""
-        return not self.is_booked and not self.admin_disabled and self.date >= timezone.now().date()
+        # Check basic availability conditions
+        if self.is_booked or self.admin_disabled or self.date < timezone.now().date():
+            return False
+        
+        # Check if there's an active blackout date for this sport and date
+        if BlackoutDate.objects.filter(
+            sport=self.sport,
+            date=self.date,
+            is_active=True
+        ).exists():
+            return False
+        
+        return True
 
 
 class Booking(models.Model):

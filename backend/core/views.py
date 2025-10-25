@@ -1061,6 +1061,8 @@ class BlackoutDateViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Create blackout date with duplicate checking"""
+        from django.db import IntegrityError
+        
         sport_id = request.data.get('sport')
         date = request.data.get('date')
         
@@ -1079,6 +1081,21 @@ class BlackoutDateViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Proceed with normal creation
-        return super().create(request, *args, **kwargs)
+        # Proceed with normal creation, but catch integrity errors
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            # Handle race condition where duplicate was created between check and insert
+            existing = BlackoutDate.objects.filter(sport_id=sport_id, date=date).first()
+            return Response(
+                {
+                    'error': f'Blackout date already exists for this sport on {date}',
+                    'existing_blackout': {
+                        'id': existing.id if existing else None,
+                        'reason': existing.reason if existing else 'Unknown',
+                        'date': date
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 

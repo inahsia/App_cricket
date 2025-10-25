@@ -399,6 +399,23 @@ const ManageSlotsScreen = () => {
   // Toggle slot availability
   const handleToggleAvailability = async (slot: Slot) => {
     try {
+      // Check if this slot is on a blackout date
+      const slotDate = slot.date;
+      const isBlackoutDate = blackoutDates.some(bd => 
+        bd.date === slotDate && 
+        bd.sport === slot.sport && 
+        bd.is_active
+      );
+      
+      if (isBlackoutDate) {
+        Alert.alert(
+          'Cannot Toggle Availability',
+          'This slot is on a blackout date and cannot be manually enabled/disabled. Please remove the blackout date first if you want to make this slot available.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       console.log('🔄 Toggling availability for slot:', slot.id);
       console.log('🔄 Current slot data:', slot);
       
@@ -472,12 +489,22 @@ const ManageSlotsScreen = () => {
   };
 
   const renderSlot = (slot: Slot) => {
-    // Determine availability considering admin_disabled status
+    // Check if this slot is on a blackout date
+    const slotDate = slot.date;
+    const isBlackoutDate = blackoutDates.some(bd => 
+      bd.date === slotDate && 
+      bd.sport === slot.sport && 
+      bd.is_active
+    );
+    
+    // Determine availability considering all factors
     const isAdminDisabled = slot.admin_disabled ?? false;
-    const isAvailable = !slot.is_booked && !isAdminDisabled && slot.is_available !== false;
+    const isAvailable = !slot.is_booked && !isAdminDisabled && !isBlackoutDate && slot.is_available !== false;
     
     const statusColor = slot.is_booked 
       ? '#ef4444' // Red for booked
+      : isBlackoutDate
+      ? '#8b5cf6' // Purple for blackout dates
       : isAdminDisabled
       ? '#FFA500' // Orange for admin-disabled
       : isAvailable 
@@ -486,6 +513,8 @@ const ManageSlotsScreen = () => {
       
     const statusText = slot.is_booked 
       ? 'Booked' 
+      : isBlackoutDate
+      ? 'Blackout'
       : isAdminDisabled
       ? 'Disabled'
       : isAvailable 
@@ -494,6 +523,8 @@ const ManageSlotsScreen = () => {
     
     const statusBgColor = slot.is_booked 
       ? '#fef2f2' 
+      : isBlackoutDate
+      ? '#f3f4f6' // Light purple for blackout
       : isAvailable 
       ? '#ecfdf5' 
       : '#f1f5f9';
@@ -521,12 +552,23 @@ const ManageSlotsScreen = () => {
           </View>
           <View style={styles.slotActions}>
             <TouchableOpacity
-              style={[styles.editButton, { backgroundColor: isAvailable ? '#fef3c7' : '#ecfdf5' }]}
-              onPress={() => handleToggleAvailability(slot)}>
+              style={[
+                styles.editButton, 
+                { 
+                  backgroundColor: isBlackoutDate 
+                    ? '#f3f4f6' 
+                    : isAvailable 
+                    ? '#fef3c7' 
+                    : '#ecfdf5',
+                  opacity: isBlackoutDate ? 0.5 : 1
+                }
+              ]}
+              onPress={() => handleToggleAvailability(slot)}
+              disabled={isBlackoutDate}>
               <Icon 
-                name={isAvailable ? "eye-slash" : "eye"} 
+                name={isBlackoutDate ? "calendar-times" : isAvailable ? "eye-slash" : "eye"} 
                 size={18} 
-                color={isAvailable ? "#f59e0b" : "#10b981"} 
+                color={isBlackoutDate ? "#8b5cf6" : isAvailable ? "#f59e0b" : "#10b981"} 
               />
             </TouchableOpacity>
             <TouchableOpacity
