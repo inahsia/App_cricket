@@ -243,6 +243,7 @@ class SlotViewSet(viewsets.ModelViewSet):
     """ViewSet for Slot CRUD operations"""
     queryset = TimeSlot.objects.all()
     serializer_class = TimeSlotSerializer
+    pagination_class = None  # Disable pagination to show all slots in admin interface
 
     def get_permissions(self):
         """Admin can create/update/delete, others can only view"""
@@ -270,8 +271,17 @@ class SlotViewSet(viewsets.ModelViewSet):
             today = timezone.now().date()
             queryset = queryset.filter(is_booked=False, date__gte=today)
         
-        # Log the query for debugging
-        print(f"Slots Query - Sport: {sport_id}, Available: {available}, Count: {queryset.count()}")
+        # Enhanced logging for debugging
+        total_slots = TimeSlot.objects.count()
+        print(f"🔍 Slots Query Debug:")
+        print(f"   Total slots in DB: {total_slots}")
+        print(f"   Query params - Sport: {sport_id}, Date: {date}, Available: {available}")
+        print(f"   Filtered count: {queryset.count()}")
+        
+        # Log a few sample slots
+        sample_slots = queryset[:5]
+        for slot in sample_slots:
+            print(f"   📅 Sample slot: {slot.sport.name} | {slot.date} | {slot.start_time}-{slot.end_time} | Booked: {slot.is_booked}")
 
         return queryset.order_by('date', 'start_time')
 
@@ -303,6 +313,7 @@ class SlotViewSet(viewsets.ModelViewSet):
             buffer_time = request.data.get('buffer_time', 0)
             weekend_opens_at = request.data.get('weekend_opens_at')
             weekend_closes_at = request.data.get('weekend_closes_at')
+            force_replace = request.data.get('force_replace', False)  # Option to replace existing slots
             
             if not all([sport_id, start_date_str, end_date_str]):
                 return Response(
@@ -313,22 +324,69 @@ class SlotViewSet(viewsets.ModelViewSet):
             # Get sport
             try:
                 sport = Sport.objects.get(id=sport_id)
+                print(f"✅ Found sport: {sport.name} (ID: {sport_id})")
             except Sport.DoesNotExist:
+                print(f"❌ Sport not found: {sport_id}")
                 return Response(
                     {'error': 'Sport not found'},
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Parse dates
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            # Parse dates first
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError as e:
+                return Response(
+                    {'error': f'Invalid date format: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
+            # Debug: Print all parameters
+            print(f"📊 Bulk slot parameters:")
+            print(f"   Sport: {sport.name} (ID: {sport_id})")
+            print(f"   Date range: {start_date_str} to {end_date_str}")
+            print(f"   Opens at: {opens_at}")
+            print(f"   Closes at: {closes_at}")
+            print(f"   Slot duration: {slot_duration}")
+            print(f"   Buffer time: {buffer_time}")
+            print(f"   Weekend opens: {weekend_opens_at}")
+            print(f"   Weekend closes: {weekend_closes_at}")
+            print(f"   Manual slots: {len(manual_time_slots)}")
+            
+            # Check existing slots for this sport and date range
+            existing_slots = TimeSlot.objects.filter(
+                sport=sport,
+                date__range=[start_date, end_date]
+            ).order_by('date', 'start_time')
+            
+            print(f"🔍 Found {existing_slots.count()} existing slots for this sport in date range:")
+            for slot in existing_slots:
+                print(f"   📅 {slot.date} {slot.start_time}-{slot.end_time} (ID: {slot.id}, Booked: {slot.is_booked})")
+            
+            # Validate required configuration
+            if not opens_at or not closes_at:
+                print(f"❌ Missing operating hours: opens_at={opens_at}, closes_at={closes_at}")
+                return Response(
+                    {'error': 'Operating hours (opens_at and closes_at) are required for automatic slot generation. Please set up booking configuration for this sport first.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not slot_duration:
+                print(f"❌ Missing slot duration")
+                return Response(
+                    {'error': 'Slot duration is required for automatic slot generation. Please set up booking configuration for this sport first.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Initialize counters and start processing
             created_slots = []
+            skipped_count = 0
             current_date = start_date
             
             while current_date <= end_date:
                 # Check if it's a blackout date
-                if BlackoutDate.objects.filter(sport=sport, date=current_date).exists():
+                if BlackoutDate.objects.filter(sport=sport, date=current_date, is_active=True).exists():
                     current_date += timedelta(days=1)
                     continue
                 
@@ -405,12 +463,31 @@ class SlotViewSet(viewsets.ModelViewSet):
                         break
                     
                     # Check if slot already exists
-                    if not TimeSlot.objects.filter(
+                    existing_slot = TimeSlot.objects.filter(
                         sport=sport,
                         date=current_date,
-                        start_time=current_slot_start.time(),
-                        end_time=current_slot_end.time()
-                    ).exists():
+                        start_time=current_slot_start.time()
+                    ).first()
+                    
+                    if existing_slot:
+                        if force_replace:
+                            print(f"   🔄 Replacing existing slot: {current_slot_start.time()}-{current_slot_end.time()} (ID: {existing_slot.id})")
+                            existing_slot.delete()
+                            slot = TimeSlot.objects.create(
+                                sport=sport,
+                                date=current_date,
+                                start_time=current_slot_start.time(),
+                                end_time=current_slot_end.time(),
+                                price=sport.price_per_hour,
+                                max_players=sport.max_players
+                                # is_booked defaults to False, which makes slot available
+                            )
+                            created_slots.append(slot)
+                            print(f"   ✅ Created replacement slot: {current_slot_start.time()}-{current_slot_end.time()} (ID: {slot.id})")
+                        else:
+                            print(f"   ⚠️ Slot already exists: {current_slot_start.time()}-{current_slot_end.time()} (ID: {existing_slot.id})")
+                            skipped_count += 1
+                    else:
                         slot = TimeSlot.objects.create(
                             sport=sport,
                             date=current_date,
@@ -418,8 +495,10 @@ class SlotViewSet(viewsets.ModelViewSet):
                             end_time=current_slot_end.time(),
                             price=sport.price_per_hour,
                             max_players=sport.max_players
+                            # is_booked defaults to False, which makes slot available
                         )
                         created_slots.append(slot)
+                        print(f"   ✅ Created slot: {current_slot_start.time()}-{current_slot_end.time()} (ID: {slot.id})")
                     
                     # Move to next slot (including buffer time)
                     current_slot_start = current_slot_end + timedelta(minutes=buffer_time)
@@ -429,9 +508,21 @@ class SlotViewSet(viewsets.ModelViewSet):
             # Serialize created slots
             serializer = TimeSlotSerializer(created_slots, many=True)
             
+            response_message = f'Successfully created {len(created_slots)} slots'
+            if skipped_count > 0:
+                response_message += f' (skipped {skipped_count} existing slots)'
+            
             return Response({
-                'message': f'Successfully created {len(created_slots)} slots',
+                'message': response_message,
                 'created_count': len(created_slots),
+                'skipped_count': skipped_count,
+                'slots': serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+            return Response({
+                'message': response_message,
+                'created_count': len(created_slots),
+                'skipped_count': skipped_count,
                 'slots': serializer.data
             }, status=status.HTTP_201_CREATED)
             
@@ -442,7 +533,49 @@ class SlotViewSet(viewsets.ModelViewSet):
             print(f"Traceback: {traceback.format_exc()}")
             print(f"Request data: {request.data}")
             return Response(
-                {'error': f'Failed to create slots: {str(e)}'},
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['delete'])
+    def clear_slots(self, request):
+        """Clear all slots for a sport in a date range"""
+        sport_id = request.data.get('sport')
+        start_date_str = request.data.get('start_date')
+        end_date_str = request.data.get('end_date')
+        
+        if not all([sport_id, start_date_str, end_date_str]):
+            return Response(
+                {'error': 'sport, start_date, and end_date are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            sport = Sport.objects.get(id=sport_id)
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            
+            slots_to_delete = TimeSlot.objects.filter(
+                sport=sport,
+                date__range=[start_date, end_date]
+            )
+            
+            deleted_count = slots_to_delete.count()
+            slots_to_delete.delete()
+            
+            return Response({
+                'message': f'Successfully deleted {deleted_count} slots',
+                'deleted_count': deleted_count
+            }, status=status.HTTP_200_OK)
+            
+        except Sport.DoesNotExist:
+            return Response(
+                {'error': 'Sport not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -902,10 +1035,10 @@ class BlackoutDateViewSet(viewsets.ModelViewSet):
     serializer_class = BlackoutDateSerializer
     
     def get_permissions(self):
-        """Authenticated users can manage, anyone can view"""
+        """Admin can create/update/delete, anyone can view"""
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
-        return [IsAuthenticated()]
+        return [IsAdminUser()]
     
     def get_queryset(self):
         """Filter by sport and/or date range"""
@@ -924,6 +1057,5 @@ class BlackoutDateViewSet(viewsets.ModelViewSet):
         if end_date:
             queryset = queryset.filter(date__lte=end_date)
         
-        logger.info(f"BlackoutDate queryset: sport={sport_id}, start={start_date}, end={end_date}, count={queryset.count()}")
         return queryset
 

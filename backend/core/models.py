@@ -214,6 +214,7 @@ class BlackoutDate(models.Model):
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='blackout_dates')
     date = models.DateField()
     reason = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

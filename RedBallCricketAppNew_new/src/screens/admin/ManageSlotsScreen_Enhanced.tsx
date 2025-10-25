@@ -74,6 +74,17 @@ const ManageSlotsScreen = () => {
       setSlots(Array.isArray(slotsResponse) ? slotsResponse : []);
       setSports(Array.isArray(sportsResponse) ? sportsResponse : []);
       
+      // Debug: Log received slots data
+      console.log('📊 Slots received from API:', slotsResponse);
+      console.log('📊 Total slots count:', Array.isArray(slotsResponse) ? slotsResponse.length : 0);
+      if (Array.isArray(slotsResponse)) {
+        const slotsByDate = slotsResponse.reduce((acc, slot) => {
+          acc[slot.date] = (acc[slot.date] || 0) + 1;
+          return acc;
+        }, {});
+        console.log('📅 Slots by date:', slotsByDate);
+      }
+      
       // Debug: Check which sports have booking configurations
       const sportsWithConfig = [];
       const sportsWithoutConfig = [];
@@ -117,21 +128,31 @@ const ManageSlotsScreen = () => {
 
   const applyFilters = () => {
     let filtered = [...slots];
+    
+    console.log('🔍 Applying filters:');
+    console.log('   Total slots before filtering:', filtered.length);
+    console.log('   Filter Sport:', filterSport);
+    console.log('   Filter Start Date:', filterStartDate);
+    console.log('   Filter End Date:', filterEndDate);
 
     if (filterSport) {
       filtered = filtered.filter(slot => slot.sport === filterSport);
+      console.log('   After sport filter:', filtered.length);
     }
 
     if (filterStartDate) {
       const startDateStr = filterStartDate.toISOString().split('T')[0];
       filtered = filtered.filter(slot => slot.date >= startDateStr);
+      console.log('   After start date filter:', filtered.length);
     }
 
     if (filterEndDate) {
       const endDateStr = filterEndDate.toISOString().split('T')[0];
       filtered = filtered.filter(slot => slot.date <= endDateStr);
+      console.log('   After end date filter:', filtered.length);
     }
-
+    
+    console.log('✅ Final filtered slots:', filtered.length);
     setFilteredSlots(filtered);
   };
 
@@ -209,11 +230,32 @@ const ManageSlotsScreen = () => {
       loadData();
     } catch (error: any) {
       console.error('Bulk generation error:', error);
+      console.error('Error response data:', error.response?.data);
+      
       const errorMessage = error.response?.data?.error 
         || error.response?.data?.detail 
         || error.message 
         || 'Failed to generate slots';
-      Alert.alert('Error', errorMessage);
+      
+      // Check if it's a configuration error
+      if (errorMessage.includes('booking configuration')) {
+        Alert.alert(
+          'Missing Booking Configuration',
+          'This sport needs booking configuration set up first. Please go to Booking Configuration and set up the operating hours, slot duration, and other settings for this sport.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Go to Booking Config', 
+              onPress: () => {
+                setShowBulkGenerateModal(false);
+                navigation.navigate('BookingManagement' as never);
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -227,6 +269,12 @@ const ManageSlotsScreen = () => {
     }
 
     try {
+      console.log('🚫 Creating blackout date:', {
+        sport: blackoutSport,
+        date: blackoutDate.toISOString().split('T')[0],
+        reason: blackoutReason,
+      });
+      
       await SlotsService.createBlackoutDate({
         sport: blackoutSport,
         date: blackoutDate.toISOString().split('T')[0],
@@ -240,8 +288,16 @@ const ManageSlotsScreen = () => {
       setBlackoutReason('');
       loadData();
     } catch (error: any) {
-      console.error('Blackout date error:', error);
-      Alert.alert('Error', 'Failed to create blackout date');
+      console.error('🚫 Blackout date error:', error);
+      console.error('🚫 Error response:', error.response?.data);
+      console.error('🚫 Error status:', error.response?.status);
+      
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.detail || 
+                          error.message || 
+                          'Failed to create blackout date';
+      
+      Alert.alert('Error', `Blackout date creation failed:\\n${errorMessage}`);
     }
   };
 
@@ -298,11 +354,22 @@ const ManageSlotsScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('🗑️ Deleting slot:', slotId);
               await AdminService.deleteSlot(slotId);
+              console.log('✅ Slot deleted successfully');
               Alert.alert('Success', 'Slot deleted successfully');
               loadData();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete slot');
+            } catch (error: any) {
+              console.error('❌ Delete slot error:', error);
+              console.error('❌ Error response:', error.response?.data);
+              console.error('❌ Error status:', error.response?.status);
+              
+              const errorMessage = error.response?.data?.error || 
+                                  error.response?.data?.detail || 
+                                  error.message || 
+                                  'Failed to delete slot';
+              
+              Alert.alert('Error', `Delete failed:\\n${errorMessage}`);
             }
           },
         },
@@ -380,7 +447,21 @@ const ManageSlotsScreen = () => {
     return <Loading />;
   }
 
+  // Apply filters and determine display logic
   const displaySlots = filteredSlots.length > 0 ? filteredSlots : slots;
+  
+  // Debug display logic
+  console.log('📱 Display Logic Debug:');
+  console.log('   Raw slots count:', slots.length);
+  console.log('   Filtered slots count:', filteredSlots.length);
+  console.log('   Display slots count:', displaySlots.length);
+  
+  if (displaySlots.length > 0) {
+    console.log('   First few display slots:');
+    displaySlots.slice(0, 5).forEach((slot, index) => {
+      console.log(`     ${index + 1}. ${slot.sport_name} - ${slot.date} - ${slot.start_time}`);
+    });
+  }
   const hasActiveFilters = filterSport || filterStartDate || filterEndDate;
 
   return (
