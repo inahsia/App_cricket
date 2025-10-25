@@ -125,11 +125,12 @@ class TimeSlotSerializer(serializers.ModelSerializer):
     class Meta:
         model = TimeSlot
         fields = ['id', 'sport', 'sport_name', 'sport_details', 'date', 
-                  'start_time', 'end_time', 'price', 'is_booked', 'max_players',
-                  'is_available', 'created_at', 'updated_at']
+                  'start_time', 'end_time', 'price', 'is_booked', 'admin_disabled',
+                  'max_players', 'is_available', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_is_available(self, obj):
+        """Get computed availability status"""
         return obj.is_available()
 
     def validate(self, data):

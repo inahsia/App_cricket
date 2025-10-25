@@ -244,6 +244,8 @@ class TimeSlot(models.Model):
     )
     is_booked = models.BooleanField(default=False)
     max_players = models.IntegerField(default=10, validators=[MinValueValidator(1)])
+    # Note: We'll use a separate field or model to track admin-disabled slots
+    admin_disabled = models.BooleanField(default=False)  # Admin can disable slots
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -258,7 +260,7 @@ class TimeSlot(models.Model):
 
     def is_available(self):
         """Check if slot is available for booking"""
-        return not self.is_booked and self.date >= timezone.now().date()
+        return not self.is_booked and not self.admin_disabled and self.date >= timezone.now().date()
 
 
 class Booking(models.Model):

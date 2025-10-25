@@ -8,6 +8,7 @@ import {
   Alert,
   RefreshControl,
   Modal,
+  Switch,
 } from 'react-native';
 import Colors from '../../config/colors';
 import { Slot, Sport } from '../../types';
@@ -46,6 +47,8 @@ const ManageSlotsScreen = () => {
   const [filterSport, setFilterSport] = useState<number | null>(null);
   const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
   const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
+  const [showOnlyAvailable, setShowOnlyAvailable] = useState(true); // Default to show only available
+  const [hidePastDates, setHidePastDates] = useState(true); // Default to hide past dates
   const [showFilterStartDatePicker, setShowFilterStartDatePicker] = useState(false);
   const [showFilterEndDatePicker, setShowFilterEndDatePicker] = useState(false);
 
@@ -61,7 +64,7 @@ const ManageSlotsScreen = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [slots, filterSport, filterStartDate, filterEndDate]);
+  }, [slots, filterSport, filterStartDate, filterEndDate, showOnlyAvailable, hidePastDates]);
 
   const loadData = async () => {
     try {
@@ -128,12 +131,31 @@ const ManageSlotsScreen = () => {
 
   const applyFilters = () => {
     let filtered = [...slots];
+    const today = new Date().toISOString().split('T')[0];
     
     console.log('🔍 Applying filters:');
     console.log('   Total slots before filtering:', filtered.length);
     console.log('   Filter Sport:', filterSport);
     console.log('   Filter Start Date:', filterStartDate);
     console.log('   Filter End Date:', filterEndDate);
+    console.log('   Show Only Available:', showOnlyAvailable);
+    console.log('   Hide Past Dates:', hidePastDates);
+
+    // Filter out past dates if enabled
+    if (hidePastDates) {
+      filtered = filtered.filter(slot => slot.date >= today);
+      console.log('   After past date filter:', filtered.length);
+    }
+
+    // Filter by availability if enabled (but don't hide admin-disabled slots in admin view)
+    if (showOnlyAvailable) {
+      filtered = filtered.filter(slot => {
+        // In admin view, show admin-disabled slots but mark them as unavailable
+        // Only filter out truly unavailable slots (booked or past dates)
+        return !slot.is_booked;
+      });
+      console.log('   After availability filter:', filtered.length);
+    }
 
     if (filterSport) {
       filtered = filtered.filter(slot => slot.sport === filterSport);
@@ -160,6 +182,8 @@ const ManageSlotsScreen = () => {
     setFilterSport(null);
     setFilterStartDate(null);
     setFilterEndDate(null);
+    setShowOnlyAvailable(true); // Reset to default
+    setHidePastDates(true); // Reset to default
     setShowFilterModal(false);
   };
 
@@ -261,6 +285,36 @@ const ManageSlotsScreen = () => {
     }
   };
 
+  // Check for existing blackout date when sport or date changes
+  useEffect(() => {
+    if (blackoutSport && blackoutDate) {
+      checkExistingBlackoutDate();
+    }
+  }, [blackoutSport, blackoutDate]);
+
+  const checkExistingBlackoutDate = async () => {
+    if (!blackoutSport || !blackoutDate) return;
+    
+    try {
+      const response: any = await SlotsService.getBlackoutDates(blackoutSport);
+      // Handle both paginated and non-paginated responses
+      const blackoutDates = Array.isArray(response) ? response : (response.results || []);
+      const selectedDateStr = blackoutDate.toISOString().split('T')[0];
+      const existing = blackoutDates.find((bd: any) => bd.date === selectedDateStr);
+      
+      if (existing) {
+        Alert.alert(
+          'Existing Blackout Date',
+          `This date already has a blackout: "${existing.reason}"\n\nPlease choose a different date or delete the existing blackout first.`,
+          [{ text: 'OK' }]
+        );
+        setBlackoutDate(null);
+      }
+    } catch (error) {
+      console.error('Error checking existing blackout dates:', error);
+    }
+  };
+
   // Create blackout date
   const handleCreateBlackoutDate = async () => {
     if (!blackoutSport || !blackoutDate || !blackoutReason.trim()) {
@@ -297,7 +351,24 @@ const ManageSlotsScreen = () => {
                           error.message || 
                           'Failed to create blackout date';
       
-      Alert.alert('Error', `Blackout date creation failed:\\n${errorMessage}`);
+      // Handle duplicate blackout date case
+      if (errorMessage.includes('already exists')) {
+        const existingBlackout = error.response?.data?.existing_blackout;
+        const alertMessage = existingBlackout 
+          ? `A blackout date already exists for this sport on this date.\n\nExisting reason: "${existingBlackout.reason}"\n\nWould you like to update it instead?`
+          : `A blackout date already exists for this sport on this date.`;
+          
+        Alert.alert(
+          'Duplicate Blackout Date',
+          alertMessage,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'OK', style: 'default' }
+          ]
+        );
+      } else {
+        Alert.alert('Error', `Blackout date creation failed:\n${errorMessage}`);
+      }
     }
   };
 
@@ -328,17 +399,40 @@ const ManageSlotsScreen = () => {
   // Toggle slot availability
   const handleToggleAvailability = async (slot: Slot) => {
     try {
-      const newAvailability = !slot.is_available;
-      await AdminService.updateSlot(slot.id, { is_available: newAvailability });
+      console.log('🔄 Toggling availability for slot:', slot.id);
+      console.log('🔄 Current slot data:', slot);
+      
+      // Toggle admin_disabled field (backend controls availability)
+      const currentDisabled = slot.admin_disabled ?? false;
+      const newDisabled = !currentDisabled;
+      
+      console.log('🔄 Current admin_disabled:', currentDisabled);
+      console.log('🔄 New admin_disabled:', newDisabled);
+      
+      const updatedSlot = await AdminService.updateSlot(slot.id, {
+        admin_disabled: newDisabled
+      });
+      
+      console.log('✅ Backend response:', updatedSlot);
+      
+      // Update the slot in the local state immediately
+      setSlots(prevSlots => 
+        prevSlots.map(s => 
+          s.id === slot.id 
+            ? { ...s, admin_disabled: newDisabled, is_available: !newDisabled && !s.is_booked } 
+            : s
+        )
+      );
       
       Alert.alert(
-        'Success',
-        `Slot marked as ${newAvailability ? 'available' : 'unavailable'}`
+        'Success', 
+        `Slot ${newDisabled ? 'deactivated' : 'activated'} successfully. ${newDisabled ? 'Users will not be able to book this slot.' : 'Users can now book this slot.'}`
       );
-      loadData();
     } catch (error: any) {
-      console.error('Toggle availability error:', error);
-      Alert.alert('Error', 'Failed to update slot availability');
+      console.error('❌ Toggle availability error:', error);
+      console.error('❌ Error details:', error.response?.data);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update slot availability';
+      Alert.alert('Error', `Failed to update slot: ${errorMessage}`);
     }
   };
 
@@ -378,41 +472,67 @@ const ManageSlotsScreen = () => {
   };
 
   const renderSlot = (slot: Slot) => {
-    const isAvailable = slot.is_available !== false && !slot.is_booked;
+    // Determine availability considering admin_disabled status
+    const isAdminDisabled = slot.admin_disabled ?? false;
+    const isAvailable = !slot.is_booked && !isAdminDisabled && slot.is_available !== false;
+    
     const statusColor = slot.is_booked 
-      ? Colors.error 
+      ? '#ef4444' // Red for booked
+      : isAdminDisabled
+      ? '#FFA500' // Orange for admin-disabled
       : isAvailable 
-      ? Colors.success 
-      : '#999';
+      ? '#10b981' // Green for available
+      : '#64748b'; // Gray for other unavailable
+      
     const statusText = slot.is_booked 
       ? 'Booked' 
+      : isAdminDisabled
+      ? 'Disabled'
       : isAvailable 
       ? 'Available' 
       : 'Unavailable';
+    
+    const statusBgColor = slot.is_booked 
+      ? '#fef2f2' 
+      : isAvailable 
+      ? '#ecfdf5' 
+      : '#f1f5f9';
 
     return (
-      <Card key={slot.id} style={styles.slotCard}>
+      <Card key={slot.id} style={[styles.slotCard, { borderLeftColor: statusColor }]}>
         <View style={styles.slotHeader}>
           <View style={{flex: 1}}>
-            <Text style={styles.sportName}>{slot.sport_name}</Text>
-            <Text style={styles.dateTime}>
-              {formatDate(slot.date)} • {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={styles.sportName}>{slot.sport_name}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: statusBgColor }]}>
+                <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Icon name="calendar" size={14} color="#64748b" style={{ marginRight: 6 }} />
+              <Text style={styles.dateTime}>{formatDate(slot.date)}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Icon name="clock" size={14} color="#64748b" style={{ marginRight: 6 }} />
+              <Text style={styles.dateTime}>
+                {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+              </Text>
+            </View>
           </View>
           <View style={styles.slotActions}>
             <TouchableOpacity
-              style={styles.editButton}
+              style={[styles.editButton, { backgroundColor: isAvailable ? '#fef3c7' : '#ecfdf5' }]}
               onPress={() => handleToggleAvailability(slot)}>
               <Icon 
                 name={isAvailable ? "eye-slash" : "eye"} 
                 size={18} 
-                color={isAvailable ? "#999" : Colors.success} 
+                color={isAvailable ? "#f59e0b" : "#10b981"} 
               />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.deleteButton}
+              style={[styles.deleteButton, { backgroundColor: '#fef2f2' }]}
               onPress={() => handleDeleteSlot(slot.id)}>
-              <Icon name="trash" size={18} color={Colors.error} />
+              <Icon name="trash" size={18} color="#ef4444" />
             </TouchableOpacity>
           </View>
         </View>
@@ -696,6 +816,30 @@ const ManageSlotsScreen = () => {
             </View>
 
             <View style={styles.formField}>
+              <View style={styles.switchRow}>
+                <Text style={styles.formLabel}>Show Only Available Slots</Text>
+                <Switch
+                  value={showOnlyAvailable}
+                  onValueChange={setShowOnlyAvailable}
+                  trackColor={{ false: '#767577', true: Colors.primary + '50' }}
+                  thumbColor={showOnlyAvailable ? Colors.primary : '#f4f3f4'}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formField}>
+              <View style={styles.switchRow}>
+                <Text style={styles.formLabel}>Hide Past Dates</Text>
+                <Switch
+                  value={hidePastDates}
+                  onValueChange={setHidePastDates}
+                  trackColor={{ false: '#767577', true: Colors.primary + '50' }}
+                  thumbColor={hidePastDates ? Colors.primary : '#f4f3f4'}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formField}>
               <Text style={styles.formLabel}>From Date</Text>
               <TouchableOpacity 
                 style={styles.dateButton}
@@ -850,29 +994,42 @@ const ManageSlotsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#f8fafc',
   },
   scrollView: {
     flex: 1,
   },
   actionButtonsContainer: {
     flexDirection: 'row',
-    padding: 16,
-    gap: 8,
+    padding: 20,
+    gap: 12,
+    backgroundColor: 'white',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
-    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
   actionButtonText: {
     color: '#FFF',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   activeFiltersContainer: {
     flexDirection: 'row',
@@ -938,7 +1095,15 @@ const styles = StyleSheet.create({
   },
   slotCard: {
     marginBottom: 16,
-    padding: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: 'white',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    borderLeftWidth: 4,
   },
   slotHeader: {
     flexDirection: 'row',
@@ -947,14 +1112,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sportName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginRight: 12,
   },
   dateTime: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#64748b',
+    fontWeight: '500',
   },
   slotActions: {
     flexDirection: 'row',
@@ -978,11 +1144,32 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     color: '#6B7280',
+    fontWeight: '500',
   },
   value: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#1F2937',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  detailItem: {
+    alignItems: 'center',
+    flex: 1,
   },
   status: {
     paddingHorizontal: 12,
@@ -1035,6 +1222,11 @@ const styles = StyleSheet.create({
   },
   formField: {
     marginBottom: 20,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   formLabel: {
     fontSize: 14,

@@ -1059,3 +1059,26 @@ class BlackoutDateViewSet(viewsets.ModelViewSet):
         
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        """Create blackout date with duplicate checking"""
+        sport_id = request.data.get('sport')
+        date = request.data.get('date')
+        
+        # Check if blackout date already exists
+        existing = BlackoutDate.objects.filter(sport_id=sport_id, date=date).first()
+        if existing:
+            return Response(
+                {
+                    'error': f'Blackout date already exists for this sport on {date}',
+                    'existing_blackout': {
+                        'id': existing.id,
+                        'reason': existing.reason,
+                        'date': existing.date
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Proceed with normal creation
+        return super().create(request, *args, **kwargs)
+
