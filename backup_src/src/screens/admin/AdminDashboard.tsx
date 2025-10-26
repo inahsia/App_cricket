@@ -95,17 +95,33 @@ const AdminDashboard = () => {
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => navigation.navigate('AddSport')}
+              onPress={() => navigation.navigate('SportsManagement')}
             >
-              <Icon name="plus" size={20} color="#FFFFFF" />
-              <Text style={styles.actionButtonText}>Add Sport</Text>
+              <Icon name="futbol-o" size={20} color="#FFFFFF" />
+              <Text style={styles.actionButtonText}>Sports</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: '#10B981' }]}
-              onPress={() => navigation.navigate('AddSlot')}
+              onPress={() => navigation.navigate('ManageSlots')}
             >
               <Icon name="clock-o" size={20} color="#FFFFFF" />
-              <Text style={styles.actionButtonText}>Create Slot</Text>
+              <Text style={styles.actionButtonText}>Slots</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#F59E0B', marginTop: 12 }]}
+              onPress={() => navigation.navigate('AllBookings')}
+            >
+              <Icon name="calendar" size={20} color="#FFFFFF" />
+              <Text style={styles.actionButtonText}>Bookings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#8B5CF6', marginTop: 12 }]}
+              onPress={() => navigation.navigate('BookingHistory')}
+            >
+              <Icon name="users" size={20} color="#FFFFFF" />
+              <Text style={styles.actionButtonText}>Players</Text>
             </TouchableOpacity>
           </View>
         </Card>

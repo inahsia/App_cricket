@@ -2,8 +2,6 @@
  * Utility functions for formatting data
  */
 
-import { format, parseISO } from 'date-fns';
-
 export const formatCurrency = (amount: string | number | undefined): string => {
   if (amount === undefined || amount === null) {
     return '₹0.00';
@@ -14,8 +12,13 @@ export const formatCurrency = (amount: string | number | undefined): string => {
 
 export const formatDate = (date: string | Date): string => {
   try {
-    const dateObj = typeof date === 'string' ? parseISO(date) : date;
-    return format(dateObj, 'dd MMM yyyy');
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const options: Intl.DateTimeFormatOptions = { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
+    };
+    return dateObj.toLocaleDateString('en-US', options);
   } catch (error) {
     return String(date);
   }
@@ -25,7 +28,7 @@ export const formatTime = (time: string): string => {
   try {
     // Time comes as HH:mm:ss from backend
     const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
+    const hour = parseInt(hours, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
@@ -36,8 +39,18 @@ export const formatTime = (time: string): string => {
 
 export const formatDateTime = (dateTime: string): string => {
   try {
-    const dateObj = parseISO(dateTime);
-    return format(dateObj, 'dd MMM yyyy, hh:mm a');
+    const dateObj = new Date(dateTime);
+    const dateOptions: Intl.DateTimeFormatOptions = { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
+    };
+    const timeOptions: Intl.DateTimeFormatOptions = { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: true 
+    };
+    return `${dateObj.toLocaleDateString('en-US', dateOptions)}, ${dateObj.toLocaleTimeString('en-US', timeOptions)}`;
   } catch (error) {
     return String(dateTime);
   }

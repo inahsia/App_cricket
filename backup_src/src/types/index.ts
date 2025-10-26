@@ -16,13 +16,15 @@ export interface Sport {
   name: string;
   price_per_hour: string;
   description?: string;
+  duration: number;
+  max_players: number;
   is_active: boolean;
   available_slots_count: number;
   created_at: string;
   updated_at: string;
 }
 
-export interface Slot {
+export interface TimeSlot {
   id: number;
   sport: number;
   sport_name: string;
@@ -65,7 +67,7 @@ export interface Booking {
   user: number;
   user_details: User;
   slot: number;
-  slot_details: Slot;
+  slot_details: TimeSlot;
   players: Player[];
   player_count: number;
   created_at: string;
@@ -97,9 +99,12 @@ export interface DashboardStats {
 }
 
 export interface AuthResponse {
+  access: string;
+  refresh: string;
   user: User;
-  token: string;
-  message: string;
+  is_staff?: boolean;
+  user_type?: 'admin' | 'user' | 'player' | 'customer';
+  message?: string;
 }
 
 export interface ApiError {

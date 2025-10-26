@@ -4,7 +4,7 @@
 
 import ApiService from './api.service';
 import { API_ENDPOINTS } from '../config/api';
-import { Booking } from '../types';
+import { Booking, Player } from '../types';
 
 interface CreateBookingData {
   slot: number;
@@ -30,7 +30,8 @@ export const BookingsService = {
    * Get my bookings (Current user)
    */
   async getMyBookings(): Promise<Booking[]> {
-    return await ApiService.get<Booking[]>(API_ENDPOINTS.MY_BOOKINGS);
+    const response: any = await ApiService.get<any>(API_ENDPOINTS.MY_BOOKINGS);
+    return response.results || response || [];
   },
 
   /**
@@ -50,9 +51,9 @@ export const BookingsService = {
   /**
    * Add players to booking
    */
-  async addPlayers(bookingId: number, data: AddPlayersData): Promise<Booking> {
-    return await ApiService.post<Booking>(
-      API_ENDPOINTS.ADD_PLAYERS(bookingId),
+  async addPlayers(bookingId: number, data: AddPlayersData): Promise<{ created: number; players: Player[]; errors: any[] }> {
+    return await ApiService.post(
+      `${API_ENDPOINTS.BOOKINGS}${bookingId}/add_players/`,
       data
     );
   },
@@ -74,6 +75,16 @@ export const BookingsService = {
     return await ApiService.patch<Booking>(
       `${API_ENDPOINTS.BOOKINGS}${id}/`,
       data
+    );
+  },
+
+  /**
+   * Confirm payment for booking
+   */
+  async confirmPayment(bookingId: number): Promise<{ message: string; status: string }> {
+    return await ApiService.post(
+      `${API_ENDPOINTS.BOOKINGS}${bookingId}/confirm_payment/`,
+      {}
     );
   },
 };

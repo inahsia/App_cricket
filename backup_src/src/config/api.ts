@@ -17,8 +17,8 @@ export const BASE_URL = `${
 
 export const API_ENDPOINTS = {
   // Authentication
-  REGISTER: '/auth/register/',
-  LOGIN: '/auth/login/',
+  REGISTER: '/auth/jwt_register/',
+  LOGIN: '/auth/jwt_login/',
   
   // Sports
   SPORTS: '/sports/',
@@ -32,11 +32,12 @@ export const API_ENDPOINTS = {
   BOOKINGS: '/bookings/',
   MY_BOOKINGS: '/bookings/my_bookings/',
   CANCEL_BOOKING: (id: number) => `/bookings/${id}/cancel/`,
-  ADD_PLAYERS: (id: number) => `/bookings/${id}/add_players/`,
+  // Player bulk registration (by booking)
+  PLAYERS_REGISTER_FORM: '/players/register_form/',
   
   // Players
   PLAYERS: '/players/',
-  PLAYER_PROFILE: '/players/my_profile/',
+  PLAYER_PROFILE: '/players/me/',
   SCAN_QR: '/players/scan_qr/',
   
   // Payments
@@ -46,12 +47,17 @@ export const API_ENDPOINTS = {
   // Dashboard
   DASHBOARD_STATS: '/dashboard/stats/',
 
-  // Admin Endpoints
-  ADMIN_BOOKINGS: '/admin/bookings/',
-  ADMIN_SPORTS: '/admin/sports/',
-  ADMIN_SLOTS: '/admin/slots/',
-  ADMIN_SLOTS_BULK_CREATE: '/admin/slots/bulk_create/',
-  ADMIN_USERS: '/admin/users/',
+  // Booking Configuration
+  BOOKING_CONFIG: '/booking-configurations/',
+  BREAK_TIMES: '/break-times/',
+  BLACKOUT_DATES: '/blackout-dates/',
+
+  // Admin Endpoints (use same endpoints as regular users, backend handles permissions)
+  ADMIN_BOOKINGS: '/bookings/',
+  ADMIN_SPORTS: '/sports/',
+  ADMIN_SLOTS: '/slots/',
+  ADMIN_SLOTS_BULK_CREATE: '/slots/bulk_create/',
+  ADMIN_USERS: '/users/',
 };
 
 export default {

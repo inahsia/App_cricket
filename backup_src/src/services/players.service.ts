@@ -6,9 +6,8 @@ import ApiService from './api.service';
 import { API_ENDPOINTS } from '../config/api';
 import { Player } from '../types';
 
-interface ScanQRData {
-  qr_data: string;
-}
+type LegacyQRData = { player_id: number; booking_id: number; date: string };
+type ScanQRPayload = { token: string } | { qr_data: LegacyQRData };
 
 export const PlayersService = {
   /**
@@ -35,12 +34,26 @@ export const PlayersService = {
   /**
    * Scan QR code for check-in/out
    */
-  async scanQR(data: ScanQRData): Promise<{ 
+  async scanQR(data: ScanQRPayload): Promise<{ 
     message: string;
     action: string;
     player: Player;
   }> {
     return await ApiService.post(API_ENDPOINTS.SCAN_QR, data);
+  },
+
+  /**
+   * Bulk register players to a booking
+   */
+  async bulkRegister(bookingId: number, players: Array<{ name: string; email: string; phone?: string }>): Promise<{
+    created: number;
+    players: Player[];
+    errors: any[];
+  }> {
+    return await ApiService.post(API_ENDPOINTS.PLAYERS_REGISTER_FORM, {
+      booking: bookingId,
+      players,
+    });
   },
 
   /**

@@ -35,9 +35,10 @@ const SlotsListScreen: React.FC<Props> = ({navigation, route}) => {
         sport: sportId,
         available: true,
       });
-      setSlots(data);
+      setSlots(Array.isArray(data) ? data : []);
     } catch (error) {
       Alert.alert('Error', 'Failed to load slots');
+      setSlots([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -99,7 +100,7 @@ const SlotsListScreen: React.FC<Props> = ({navigation, route}) => {
         </View>
       ) : (
         <FlatList
-          data={slots}
+          data={slots || []}
           renderItem={renderSlot}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.list}

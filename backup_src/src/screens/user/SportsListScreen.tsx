@@ -24,6 +24,7 @@ const SportsListScreen: React.FC<Props> = ({navigation}) => {
   const [sports, setSports] = useState<Sport[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSports();
@@ -31,9 +32,23 @@ const SportsListScreen: React.FC<Props> = ({navigation}) => {
 
   const fetchSports = async () => {
     try {
+      setError(null);
       const data = await SportsService.getAllSports();
-      setSports(data);
+      // Ensure we have valid data and required properties
+      if (Array.isArray(data)) {
+        const validSports = data.filter(sport => 
+          sport && 
+          typeof sport.id !== 'undefined' && 
+          typeof sport.name === 'string'
+        );
+        setSports(validSports);
+      } else {
+        setSports([]);
+        setError('Invalid data format received');
+      }
     } catch (error) {
+      console.error('Sports fetch error:', error);
+      setError('Failed to load sports');
       Alert.alert('Error', 'Failed to load sports');
     } finally {
       setLoading(false);
@@ -105,19 +120,33 @@ const SportsListScreen: React.FC<Props> = ({navigation}) => {
         </Text>
       </View>
 
-      {sports.length === 0 ? (
+      {error ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Button title="Retry" onPress={fetchSports} size="small" style={styles.retryButton} />
+        </View>
+      ) : sports.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No sports available</Text>
         </View>
       ) : (
         <FlatList
-          data={sports}
+          data={sports || []}
           renderItem={renderSport}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={item => `sport-${item?.id || Math.random()}`}
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No sports available</Text>
+            </View>
+          }
+          onError={(error) => {
+            console.error('FlatList error:', error);
+            setError('Error displaying sports');
+          }}
         />
       )}
     </View>
@@ -133,6 +162,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     padding: 20,
     alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: Colors.error,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    width: 120,
+    alignSelf: 'center',
   },
   headerTitle: {
     fontSize: 24,

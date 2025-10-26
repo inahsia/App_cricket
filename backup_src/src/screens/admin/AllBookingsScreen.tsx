@@ -14,9 +14,20 @@ import Loading from '../../components/Loading';
 import { AdminService } from '../../services/admin.service';
 import { formatDate, formatTime, formatCurrency } from '../../utils/helpers';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { Booking } from '../../types';
+import { useRoute, RouteProp } from '@react-navigation/native';
+
+type AllBookingsRouteParams = {
+  AllBookings: {
+    sportId?: number;
+    sportName?: string;
+  };
+};
 
 const AllBookingsScreen = () => {
-  const [bookings, setBookings] = useState([]);
+  const route = useRoute<RouteProp<AllBookingsRouteParams, 'AllBookings'>>();
+  const { sportId, sportName } = route.params || {};
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -28,16 +39,27 @@ const AllBookingsScreen = () => {
     try {
       setLoading(true);
       const response = await AdminService.getAllBookings();
-      setBookings(response);
+      const allBookings = Array.isArray(response) ? response : [];
+      
+      // Filter by sport if sportId is provided
+      if (sportId) {
+        const filtered = allBookings.filter(
+          (booking: Booking) => booking.slot_details?.sport === sportId
+        );
+        setBookings(filtered);
+      } else {
+        setBookings(allBookings);
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to load bookings');
+      setBookings([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleCancelBooking = async (bookingId) => {
+  const handleCancelBooking = async (bookingId: number) => {
     Alert.alert(
       'Cancel Booking',
       'Are you sure you want to cancel this booking?',
@@ -60,8 +82,14 @@ const AllBookingsScreen = () => {
     );
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
+  const getBookingStatus = (booking: Booking): string => {
+    if (booking.is_cancelled) return 'cancelled';
+    if (booking.payment_verified) return 'confirmed';
+    return 'pending';
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
       confirmed: Colors.success,
       pending: Colors.warning,
       cancelled: Colors.error,
@@ -69,29 +97,54 @@ const AllBookingsScreen = () => {
     return colors[status] || Colors.text.secondary;
   };
 
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item }: { item: Booking }) => {
+    const status = getBookingStatus(item);
+    const userName = item.user_details?.first_name && item.user_details?.last_name
+      ? `${item.user_details.first_name} ${item.user_details.last_name}`
+      : item.user_details?.username || 'Unknown User';
+    
+    return (
     <Card style={styles.bookingCard}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.bookingId}>Booking #{item.id}</Text>
-          <Text style={[styles.status, { color: getStatusColor(item.status) }]}>
-            {item.status.toUpperCase()}
+          <Text style={[styles.status, { color: getStatusColor(status) }]}>
+            {status.toUpperCase()}
           </Text>
         </View>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleCancelBooking(item.id)}
-          disabled={item.status === 'cancelled'}>
+          disabled={item.is_cancelled}>
           <Icon name="trash" size={20} color={Colors.error} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.details}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Sport:</Text>
-          <Text style={styles.value}>{item.slot_details?.sport_name}</Text>
+      {/* Prominent User and Sport Info */}
+      <View style={styles.prominentInfo}>
+        <View style={styles.infoItem}>
+          <Icon name="user" size={16} color={Colors.primary} style={styles.infoIcon} />
+          <View>
+            <Text style={styles.infoLabel}>Customer</Text>
+            <Text style={styles.infoValue}>{userName}</Text>
+            {item.user_details?.email && (
+              <Text style={styles.infoSubtext}>{item.user_details.email}</Text>
+            )}
+          </View>
         </View>
 
+        <View style={styles.infoItem}>
+          <Icon name="futbol-o" size={16} color={Colors.primary} style={styles.infoIcon} />
+          <View>
+            <Text style={styles.infoLabel}>Sport</Text>
+            <Text style={styles.infoValue}>{item.slot_details?.sport_name || 'N/A'}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.details}>
         <View style={styles.row}>
           <Text style={styles.label}>Date:</Text>
           <Text style={styles.value}>
@@ -108,19 +161,12 @@ const AllBookingsScreen = () => {
 
         <View style={styles.row}>
           <Text style={styles.label}>Players:</Text>
-          <Text style={styles.value}>{item.player_count}</Text>
+          <Text style={styles.value}>{item.player_count || 0}</Text>
         </View>
 
         <View style={styles.row}>
           <Text style={styles.label}>Amount:</Text>
-          <Text style={styles.value}>{formatCurrency(item.amount_paid)}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Customer:</Text>
-          <Text style={styles.value}>
-            {item.user_details?.first_name} {item.user_details?.last_name}
-          </Text>
+          <Text style={styles.value}>{formatCurrency(item.amount_paid || '0')}</Text>
         </View>
       </View>
 
@@ -132,16 +178,24 @@ const AllBookingsScreen = () => {
         </TouchableOpacity>
       )}
     </Card>
-  );
+    );
+  };
 
   if (loading) {
     return <Loading />;
   }
 
   return (
-    <FlatList
+    <View style={styles.container}>
+      {sportName && (
+        <View style={styles.filterHeader}>
+          <Icon name="filter" size={16} color={Colors.primary} />
+          <Text style={styles.filterText}>Showing bookings for: {sportName}</Text>
+        </View>
+      )}
+      <FlatList
       style={styles.container}
-      data={bookings}
+      data={bookings || []}
       renderItem={renderItem}
       keyExtractor={item => item.id.toString()}
       refreshControl={
@@ -153,6 +207,7 @@ const AllBookingsScreen = () => {
         </View>
       }
     />
+    </View>
   );
 };
 
@@ -160,6 +215,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background.default,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary + '15',
+    padding: 12,
+    gap: 8,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   bookingCard: {
     margin: 16,
@@ -171,6 +238,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  headerLeft: {
+    flex: 1,
   },
   bookingId: {
     fontSize: 18,
@@ -184,6 +254,38 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     padding: 8,
+  },
+  prominentInfo: {
+    marginBottom: 16,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  infoIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  infoSubtext: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: 12,
   },
   details: {
     marginBottom: 16,

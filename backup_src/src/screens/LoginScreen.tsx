@@ -17,16 +17,18 @@ import {validateEmail} from '../utils/helpers';
 
 const LoginScreen = () => {
   const navigation = useNavigation<any>();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<{username?: string; password?: string}>({});
+  const [errors, setErrors] = useState<{email?: string; password?: string}>({});
   const [loading, setLoading] = useState(false);
 
   const validate = (): boolean => {
-    const newErrors: {username?: string; password?: string} = {};
+    const newErrors: {email?: string; password?: string} = {};
 
-    if (!username.trim()) {
-      newErrors.username = 'Username is required';
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(email)) {
+      newErrors.email = 'Please enter a valid email address';
     }
 
     if (!password) {
@@ -50,7 +52,7 @@ const LoginScreen = () => {
       }
       
       console.log('Input validation passed');
-      console.log('Credentials being used:', { username, password: '****' });
+      console.log('Credentials being used:', { email, password: '****' });
       
       setLoading(true);
       console.log('Loading state set to true');
@@ -60,15 +62,18 @@ const LoginScreen = () => {
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log('Delay completed, attempting login...');
 
-      const response = await AuthService.login({username, password});
+      const response = await AuthService.login({email, password});
       console.log('Login response received:', {
         success: true,
-        hasToken: !!response.token,
+        hasAccessToken: !!response.access,
+        hasRefreshToken: !!response.refresh,
         userData: response.user ? {
           id: response.user.id,
-          username: response.user.username,
+          email: response.user.email,
           isStaff: response.user.is_staff
-        } : null
+        } : null,
+        userType: response.user_type,
+        isStaff: response.is_staff
       });
       
       // Navigate based on user role
@@ -123,12 +128,13 @@ const LoginScreen = () => {
 
         <View style={styles.form}>
           <InputField
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
-            error={errors.username}
-            placeholder="Enter your username"
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            error={errors.email}
+            placeholder="Enter your email"
             autoCapitalize="none"
+            keyboardType="email-address"
           />
 
           <InputField
@@ -138,6 +144,13 @@ const LoginScreen = () => {
             error={errors.password}
             placeholder="Enter your password"
             secureTextEntry
+          />
+
+          <Button
+            title="Forgot Password?"
+            onPress={() => navigation.navigate('ForgotPassword')}
+            variant="text"
+            style={styles.forgotButton}
           />
 
           <Button
@@ -187,6 +200,10 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
+  },
+  forgotButton: {
+    marginTop: -8,
+    marginBottom: 8,
   },
   button: {
     marginTop: 8,

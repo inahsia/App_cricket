@@ -169,7 +169,7 @@ const AdminBookingHistory = () => {
       {renderFilters()}
 
       <FlatList
-        data={bookings}
+        data={bookings || []}
         renderItem={renderBookingItem}
         keyExtractor={(item) => item.id.toString()}
         refreshControl={

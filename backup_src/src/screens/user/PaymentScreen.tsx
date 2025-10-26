@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {View, Text, StyleSheet, Alert} from 'react-native';
 import {useRoute, useNavigation} from '@react-navigation/native';
-import PaymentsService from '../../services/payments.service';
+import BookingsService from '../../services/bookings.service';
 import Button from '../../components/Button';
 import Card from '../../components/Card';
 import Colors from '../../config/colors';
@@ -10,42 +10,56 @@ import {formatCurrency} from '../../utils/helpers';
 const PaymentScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const {booking}: any = route.params || {};
+  const {booking, players}: any = route.params || {};
 
   const [loading, setLoading] = useState(false);
 
   const handlePayment = async () => {
     try {
       setLoading(true);
-
-      // Create Razorpay order
-      const order = await PaymentsService.createPayment({
-        booking_id: booking.id,
-        amount: booking.total_amount,
-      });
-
-      // In a real app, you would integrate Razorpay SDK here
-      // For now, we'll simulate a successful payment
+      
+      // Confirm payment on backend
+      await BookingsService.confirmPayment(booking.id);
+      
+      // Register players after successful payment
+      if (players && players.length > 0) {
+        try {
+          const playersData = {
+            players: players.map((player: any) => ({
+              name: player.name,
+              email: player.email
+            }))
+          };
+          
+          await BookingsService.addPlayers(booking.id, playersData);
+          console.log('Players registered successfully');
+        } catch (playerError: any) {
+          console.error('Player registration error:', playerError);
+          // Continue even if player registration fails - payment was successful
+        }
+      }
+      
       Alert.alert(
-        'Payment',
-        'Payment functionality will be integrated with Razorpay SDK. For now, marking as completed.',
+        'Success',
+        'Payment confirmed! Your booking is now confirmed and player accounts have been created.',
         [
           {
             text: 'OK',
             onPress: () => {
-              navigation.reset({
+              (navigation as any).reset({
                 index: 0,
-                routes: [{name: 'UserTabs' as never}],
+                routes: [{name: 'UserTabs'}],
               });
-              navigation.navigate('My Bookings' as never);
+              (navigation as any).navigate('My Bookings');
             },
           },
         ],
       );
     } catch (error: any) {
+      console.error('Payment confirmation error:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.error || 'Payment failed. Please try again.',
+        error.response?.data?.error || 'Failed to confirm payment. Please try again.',
       );
     } finally {
       setLoading(false);
@@ -83,8 +97,19 @@ const PaymentScreen = () => {
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Players:</Text>
-            <Text style={styles.value}>{booking.players?.length || 0}</Text>
+            <Text style={styles.value}>{players?.length || 0}</Text>
           </View>
+          {players && players.length > 0 && (
+            <View style={styles.playersSection}>
+              <Text style={styles.playersTitle}>Player List:</Text>
+              {players.map((player: any, index: number) => (
+                <View key={index} style={styles.playerItem}>
+                  <Text style={styles.playerName}>• {player.name}</Text>
+                  <Text style={styles.playerEmail}>{player.email}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.divider} />
@@ -142,7 +167,7 @@ const PaymentScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background.default,
+    backgroundColor: Colors.background,
     padding: 16,
   },
   card: {
@@ -198,7 +223,32 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     marginBottom: 16,
-    backgroundColor: Colors.background.paper,
+    backgroundColor: Colors.surface,
+  },
+  playersSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  playersTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 8,
+  },
+  playerItem: {
+    marginBottom: 4,
+  },
+  playerName: {
+    fontSize: 14,
+    color: Colors.text.primary,
+    fontWeight: '500',
+  },
+  playerEmail: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginLeft: 8,
   },
   infoTitle: {
     fontSize: 16,

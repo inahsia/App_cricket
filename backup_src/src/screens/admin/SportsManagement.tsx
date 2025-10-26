@@ -133,7 +133,7 @@ const SportsManagement = () => {
         </TouchableOpacity>
 
         <FlatList
-          data={sports}
+          data={sports || []}
           renderItem={renderSportItem}
           keyExtractor={(item) => item.id.toString()}
           refreshControl={

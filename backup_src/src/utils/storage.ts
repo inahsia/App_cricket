@@ -14,17 +14,22 @@ export const StorageService = {
   // Auth Token
   async setAuthToken(token: string): Promise<void> {
     try {
+      console.log('[Storage] Setting auth token, length:', token?.length);
       await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+      console.log('[Storage] ✅ Auth token set successfully');
     } catch (error) {
-      console.error('Error saving auth token:', error);
+      console.error('[Storage] ❌ Error saving auth token:', error);
+      throw error;
     }
   },
 
   async getAuthToken(): Promise<string | null> {
     try {
-      return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      console.log('[Storage] Getting auth token:', token ? `${token.substring(0, 20)}...` : 'NULL');
+      return token;
     } catch (error) {
-      console.error('Error getting auth token:', error);
+      console.error('[Storage] ❌ Error getting auth token:', error);
       return null;
     }
   },

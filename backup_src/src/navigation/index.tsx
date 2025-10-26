@@ -7,6 +7,8 @@ import Colors from '../config/colors';
 // Auth Screens
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ResetPasswordConfirmScreen from '../screens/ResetPasswordConfirmScreen';
 
 // User Screens
 import UserHomeScreen from '../screens/user/UserHomeScreen';
@@ -15,15 +17,15 @@ import SlotsListScreen from '../screens/user/SlotsListScreen';
 import BookingScreen from '../screens/user/BookingScreen';
 import MyBookingsScreen from '../screens/user/MyBookingsScreen';
 import PaymentScreen from '../screens/user/PaymentScreen';
+import ChangePasswordScreen from '../screens/user/ChangePasswordScreen';
 
 // Player Screens
 import PlayerDashboardScreen from '../screens/player/PlayerDashboardScreen';
-import PlayerQRScreen from '../screens/player/PlayerQRScreen';
 
 // Admin Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import ManageSportsScreen from '../screens/admin/ManageSportsScreen';
-import ManageSlotsScreen from '../screens/admin/ManageSlotsScreen';
+import ManageSlotsScreenEnhanced from '../screens/admin/ManageSlotsScreen_Enhanced';
 import QRScannerScreen from '../screens/admin/QRScannerScreen';
 import AllBookingsScreen from '../screens/admin/AllBookingsScreen';
 
@@ -35,10 +37,10 @@ const UserTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.text.secondary,
-        headerStyle: {backgroundColor: Colors.primary},
-        headerTintColor: Colors.text.light,
+        tabBarActiveTintColor: '#D32F2F',
+        tabBarInactiveTintColor: '#757575',
+        headerStyle: {backgroundColor: '#D32F2F'},
+        headerTintColor: '#FFFFFF',
       }}>
       <Tab.Screen name="Home" component={UserHomeScreen} />
       <Tab.Screen name="Sports" component={SportsListScreen} />
@@ -52,13 +54,12 @@ const PlayerTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.text.secondary,
-        headerStyle: {backgroundColor: Colors.primary},
-        headerTintColor: Colors.text.light,
+        tabBarActiveTintColor: '#D32F2F',
+        tabBarInactiveTintColor: '#757575',
+        headerStyle: {backgroundColor: '#D32F2F'},
+        headerTintColor: '#FFFFFF',
       }}>
       <Tab.Screen name="Dashboard" component={PlayerDashboardScreen} />
-      <Tab.Screen name="My QR Code" component={PlayerQRScreen} />
     </Tab.Navigator>
   );
 };
@@ -68,14 +69,14 @@ const AdminTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.text.secondary,
-        headerStyle: {backgroundColor: Colors.primary},
-        headerTintColor: Colors.text.light,
+        tabBarActiveTintColor: '#D32F2F',
+        tabBarInactiveTintColor: '#757575',
+        headerStyle: {backgroundColor: '#D32F2F'},
+        headerTintColor: '#FFFFFF',
       }}>
       <Tab.Screen name="Dashboard" component={AdminDashboardScreen} />
       <Tab.Screen name="Sports" component={ManageSportsScreen} />
-      <Tab.Screen name="Slots" component={ManageSlotsScreen} />
+      <Tab.Screen name="Slots" component={ManageSlotsScreenEnhanced} />
       <Tab.Screen name="Bookings" component={AllBookingsScreen} />
       <Tab.Screen name="Scanner" component={QRScannerScreen} />
     </Tab.Navigator>
@@ -87,9 +88,10 @@ const Navigation = () => {
     <NavigationContainer>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: {backgroundColor: Colors.primary},
-          headerTintColor: Colors.text.light,
-          headerTitleStyle: {fontWeight: '700'},
+          headerTintColor: '#FFFFFF',
+          headerStyle: {
+            backgroundColor: '#D32F2F',
+          },
         }}>
         <Stack.Screen
           name="Login"
@@ -100,6 +102,16 @@ const Navigation = () => {
           name="Register"
           component={RegisterScreen}
           options={{title: 'Create Account'}}
+        />
+        <Stack.Screen
+          name="ForgotPassword"
+          component={ForgotPasswordScreen}
+          options={{title: 'Forgot Password'}}
+        />
+        <Stack.Screen
+          name="ResetPasswordConfirm"
+          component={ResetPasswordConfirmScreen}
+          options={{title: 'Reset Password'}}
         />
         <Stack.Screen
           name="UserTab"
@@ -119,6 +131,11 @@ const Navigation = () => {
         <Stack.Screen name="Slots" component={SlotsListScreen} />
         <Stack.Screen name="Booking" component={BookingScreen} />
         <Stack.Screen name="Payment" component={PaymentScreen} />
+        <Stack.Screen 
+          name="ChangePassword" 
+          component={ChangePasswordScreen}
+          options={{title: 'Change Password'}}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

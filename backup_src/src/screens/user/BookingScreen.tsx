@@ -14,21 +14,26 @@ import Card from '../../components/Card';
 import Colors from '../../config/colors';
 import {formatCurrency, formatDate} from '../../utils/helpers';
 
+interface PlayerInput {
+  name: string;
+  email: string;
+}
+
 const BookingScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const {slot}: any = route.params || {};
 
-  const [players, setPlayers] = useState<string[]>(['']);
+  const [players, setPlayers] = useState<PlayerInput[]>([{name: '', email: ''}]);
   const [loading, setLoading] = useState(false);
 
   const addPlayerField = () => {
-    setPlayers([...players, '']);
+    setPlayers([...players, {name: '', email: ''}]);
   };
 
-  const updatePlayer = (index: number, value: string) => {
+  const updatePlayer = (index: number, field: 'name' | 'email', value: string) => {
     const newPlayers = [...players];
-    newPlayers[index] = value;
+    newPlayers[index] = {...newPlayers[index], [field]: value};
     setPlayers(newPlayers);
   };
 
@@ -42,36 +47,38 @@ const BookingScreen = () => {
   const handleBooking = async () => {
     try {
       // Validate players
-      const validPlayers = players.filter(p => p.trim().length > 0);
+      const validPlayers = players.filter(p => p.name.trim().length > 0 && p.email.trim().length > 0);
       if (validPlayers.length === 0) {
-        Alert.alert('Error', 'Please add at least one player');
+        Alert.alert('Error', 'Please add at least one player with name and email');
         return;
+      }
+
+      // Validate email formats
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      for (const player of validPlayers) {
+        if (!emailRegex.test(player.email)) {
+          Alert.alert('Error', `Invalid email format for ${player.name}`);
+          return;
+        }
       }
 
       setLoading(true);
 
-      // Create booking
+      // Create booking with only slot ID
       const booking = await BookingsService.createBooking({
         slot: slot.id,
-        players: validPlayers,
       });
 
-      Alert.alert(
-        'Success',
-        'Booking created successfully! Please proceed to payment.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.navigate('Payment' as never, {booking} as never);
-            },
-          },
-        ],
-      );
+      // Navigate to payment with booking and player info
+      (navigation as any).navigate('Payment', {
+        booking,
+        players: validPlayers,
+      });
     } catch (error: any) {
+      console.error('Booking error:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.error || 'Failed to create booking',
+        error.response?.data?.error || error.response?.data?.slot?.[0] || 'Failed to create booking. Please try again.',
       );
     } finally {
       setLoading(false);
@@ -98,22 +105,31 @@ const BookingScreen = () => {
       </Card>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Add Players</Text>
+        <Text style={styles.sectionTitle}>Add Players (Required)</Text>
         <Text style={styles.sectionDesc}>
-          Enter player names (auto-accounts will be created)
+          Enter player names and emails (user accounts will be created automatically with password 'redball')
         </Text>
 
         {players.map((player, index) => (
-          <View key={index} style={styles.playerRow}>
+          <View key={index} style={styles.playerSection}>
+            <Text style={styles.playerTitle}>Player {index + 1}</Text>
             <TextInput
               style={styles.playerInput}
-              placeholder={`Player ${index + 1} Name`}
-              value={player}
-              onChangeText={value => updatePlayer(index, value)}
+              placeholder="Player Name"
+              value={player.name}
+              onChangeText={value => updatePlayer(index, 'name', value)}
+            />
+            <TextInput
+              style={[styles.playerInput, styles.emailInput]}
+              placeholder="Player Email"
+              value={player.email}
+              onChangeText={value => updatePlayer(index, 'email', value)}
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
             {players.length > 1 && (
               <Button
-                title="Remove"
+                title="Remove Player"
                 onPress={() => removePlayer(index)}
                 variant="outline"
                 style={styles.removeButton}
@@ -140,7 +156,7 @@ const BookingScreen = () => {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Players:</Text>
             <Text style={styles.summaryValue}>
-              {players.filter(p => p.trim()).length}
+              {players.filter(p => p.name.trim() && p.email.trim()).length}
             </Text>
           </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
@@ -163,7 +179,7 @@ const BookingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background.default,
+    backgroundColor: Colors.background,
   },
   slotCard: {
     margin: 16,
@@ -204,19 +220,31 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     marginBottom: 16,
   },
-  playerRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    alignItems: 'center',
+  playerSection: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  playerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 8,
   },
   playerInput: {
-    flex: 1,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: Colors.background.paper,
+    backgroundColor: Colors.background,
+    marginBottom: 8,
+  },
+  emailInput: {
+    marginBottom: 12,
   },
   removeButton: {
     marginLeft: 8,

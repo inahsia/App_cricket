@@ -28,9 +28,6 @@ class ApiService {
       async (config) => {
         try {
           const token = await StorageService.getAuthToken();
-          if (token && config.headers) {
-            config.headers.Authorization = `Token ${token}`;
-          }
           
           // Enhanced debug logging
           console.log('=== API REQUEST ===');
@@ -38,7 +35,16 @@ class ApiService {
           console.log('Base URL:', config.baseURL);
           console.log('Endpoint:', config.url);
           console.log('Full URL:', `${config.baseURL}${config.url}`);
-          console.log('Headers:', config.headers);
+          console.log('Token Retrieved:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
+          
+          if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
+            console.log('Authorization Header SET:', `Bearer ${token.substring(0, 20)}...`);
+          } else {
+            console.warn('⚠️ NO TOKEN AVAILABLE - Request will be unauthorized!');
+          }
+          
+          console.log('Final Headers:', config.headers);
           console.log('Data:', config.data);
           console.log('==================');
           
@@ -74,6 +80,12 @@ class ApiService {
         if (error.response?.status === 401) {
           // Token expired or invalid - clear storage
           await StorageService.clearAll();
+        } else if (error.response?.status === 403) {
+          // Permission denied - keep token, but surface a friendly error
+          error.message =
+            error.response?.data?.error ||
+            error.response?.data?.detail ||
+            'You do not have permission to perform this action.';
         }
         return Promise.reject(error);
       }

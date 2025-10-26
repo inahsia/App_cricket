@@ -11,7 +11,9 @@ export const SportsService = {
    * Get all sports
    */
   async getAllSports(): Promise<Sport[]> {
-    return await ApiService.get<Sport[]>(API_ENDPOINTS.SPORTS);
+    const response: any = await ApiService.get<any>(API_ENDPOINTS.SPORTS);
+    // Handle paginated response from Django REST Framework
+    return response.results || response || [];
   },
 
   /**
