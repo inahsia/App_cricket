@@ -3,8 +3,9 @@ services:
   - type: web
     name: redball-cricket-backend
     env: python
-    buildCommand: cd backend && pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
-    startCommand: cd backend && gunicorn redball_academy.wsgi:application
+    rootDir: ./backend
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
+    startCommand: gunicorn redball_academy.wsgi:application
     envVars:
       - key: SECRET_KEY
         generateValue: true
