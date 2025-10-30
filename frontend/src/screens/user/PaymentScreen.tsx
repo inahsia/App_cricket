@@ -1,7 +1,9 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {View, Text, StyleSheet, Alert} from 'react-native';
 import {useRoute, useNavigation} from '@react-navigation/native';
 import BookingsService from '../../services/bookings.service';
+import PaymentsService from '../../services/payments.service';
+import RazorpayCheckout from 'react-native-razorpay';
 import Button from '../../components/Button';
 import Card from '../../components/Card';
 import Colors from '../../config/colors';
@@ -13,56 +15,97 @@ const PaymentScreen = () => {
   const {booking, players}: any = route.params || {};
 
   const [loading, setLoading] = useState(false);
+  const [fullBooking, setFullBooking] = useState<any>(booking);
+
+  useEffect(() => {
+    // Always fetch the latest booking details from backend
+    if (booking?.id) {
+      BookingsService.getBookingById(booking.id)
+        .then((data) => setFullBooking(data))
+        .catch(() => setFullBooking(booking));
+    }
+  }, [booking?.id]);
+
+  const getAmount = () => {
+    // Try booking.amount_paid, booking.total_amount, or booking.slot.price
+    return (
+      Number(fullBooking?.amount_paid) ||
+      Number(fullBooking?.total_amount) ||
+      Number(fullBooking?.slot?.price) ||
+      0
+    );
+  };
 
   const handlePayment = async () => {
     try {
       setLoading(true);
-      
-      // Confirm payment on backend
-      await BookingsService.confirmPayment(booking.id);
-      
-      // Register players after successful payment
-      if (players && players.length > 0) {
-        try {
-          const playersData = {
-            players: players.map((player: any) => ({
-              name: player.name,
-              email: player.email
-            }))
-          };
-          
-          await BookingsService.addPlayers(booking.id, playersData);
-          console.log('Players registered successfully');
-        } catch (playerError: any) {
-          console.error('Player registration error:', playerError);
-          // Continue even if player registration fails - payment was successful
-        }
+      const amount = getAmount();
+      if (!amount || amount <= 0) {
+        Alert.alert('Error', 'Invalid booking amount.');
+        setLoading(false);
+        return;
       }
-      
-      Alert.alert(
-        'Success',
-        'Payment confirmed! Your booking is now confirmed and player accounts have been created.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              (navigation as any).reset({
-                index: 0,
-                routes: [{name: 'UserTabs'}],
-              });
-              (navigation as any).navigate('My Bookings');
-            },
-          },
-        ],
-      );
+      // 1. Create Razorpay order from backend
+      const order = await PaymentsService.createOrder({
+        booking_id: booking.id,
+        amount: amount,
+      });
+      // 2. Launch Razorpay Checkout
+      const options = {
+        description: 'Booking Payment',
+        image: '',
+        currency: order.currency,
+        key: order.razorpay_key,
+        amount: order.amount, // in paise
+        name: 'Red Ball Cricket Academy',
+        order_id: order.order_id,
+        prefill: {
+          email: booking.user_details?.email,
+          contact: '',
+          name: booking.user_details?.first_name || '',
+        },
+        theme: { color: Colors.primary },
+      };
+      RazorpayCheckout.open(options)
+        .then(async (data: any) => {
+          console.log('Razorpay response:', data);
+          if (
+            data.razorpay_order_id &&
+            data.razorpay_payment_id &&
+            data.razorpay_signature
+          ) {
+            // 3. On success, verify payment with backend
+            await PaymentsService.verifyPayment({
+              razorpay_order_id: data.razorpay_order_id,
+              razorpay_payment_id: data.razorpay_payment_id,
+              razorpay_signature: data.razorpay_signature,
+              booking_id: booking.id,
+            });
+            Alert.alert('Success', 'Payment successful! Your booking is confirmed.', [
+              {
+                text: 'OK',
+                onPress: () => {
+                  (navigation as any).reset({
+                    index: 0,
+                    routes: [{ name: 'UserTabs' }],
+                  });
+                  (navigation as any).navigate('My Bookings');
+                },
+              },
+            ]);
+          } else {
+            Alert.alert('Payment Cancelled', 'Payment was not completed.');
+          }
+        })
+        .catch((error: any) => {
+          console.error('Razorpay error:', error);
+          Alert.alert('Payment Cancelled', 'Payment was not completed.');
+        })
+        .finally(() => setLoading(false));
     } catch (error: any) {
-      console.error('Payment confirmation error:', error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.error || 'Failed to confirm payment. Please try again.',
-      );
-    } finally {
       setLoading(false);
+      console.error('Payment error:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Payment failed. Please try again.');
     }
   };
 
@@ -83,21 +126,25 @@ const PaymentScreen = () => {
           <Text style={styles.sectionTitle}>Booking Information</Text>
           <View style={styles.row}>
             <Text style={styles.label}>Sport:</Text>
-            <Text style={styles.value}>{booking.slot?.sport_name}</Text>
+            <Text style={styles.value}>{fullBooking.slot_details?.sport_name || fullBooking.slot?.sport_name || '-'}</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Date:</Text>
-            <Text style={styles.value}>{booking.slot?.date}</Text>
+            <Text style={styles.value}>{fullBooking.slot_details?.date || fullBooking.slot?.date || '-'}</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Time:</Text>
             <Text style={styles.value}>
-              {booking.slot?.start_time} - {booking.slot?.end_time}
+              {fullBooking.slot_details?.start_time && fullBooking.slot_details?.end_time
+                ? `${fullBooking.slot_details.start_time} - ${fullBooking.slot_details.end_time}`
+                : fullBooking.slot?.start_time && fullBooking.slot?.end_time
+                ? `${fullBooking.slot.start_time} - ${fullBooking.slot.end_time}`
+                : '-'}
             </Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Players:</Text>
-            <Text style={styles.value}>{players?.length || 0}</Text>
+            <Text style={styles.value}>{players?.length || booking.player_count || 0}</Text>
           </View>
           {players && players.length > 0 && (
             <View style={styles.playersSection}>
@@ -132,7 +179,7 @@ const PaymentScreen = () => {
         <View style={styles.totalSection}>
           <Text style={styles.totalLabel}>Total Amount</Text>
           <Text style={styles.totalAmount}>
-            {formatCurrency(booking.total_amount)}
+            {formatCurrency(getAmount())}
           </Text>
         </View>
       </Card>
@@ -171,7 +218,10 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    marginBottom: 16,
+    marginBottom: 20, // increased for more separation
+    borderRadius: 12,
+    padding: 12,
+    elevation: 2,
   },
   title: {
     fontSize: 22,
@@ -180,7 +230,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   section: {
-    marginBottom: 12,
+    marginBottom: 18, // more space between sections
   },
   sectionTitle: {
     fontSize: 16,
@@ -191,7 +241,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 10, // more space between rows
   },
   label: {
     fontSize: 14,
@@ -209,7 +259,7 @@ const styles = StyleSheet.create({
   },
   totalSection: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 16, // more vertical space
   },
   totalLabel: {
     fontSize: 16,
@@ -217,13 +267,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   totalAmount: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
     color: Colors.primary,
+    marginTop: 4,
+    marginBottom: 8,
   },
   infoCard: {
-    marginBottom: 16,
+    marginBottom: 20,
     backgroundColor: Colors.surface,
+    borderRadius: 10,
+    padding: 10,
   },
   playersSection: {
     marginTop: 12,
@@ -266,10 +320,13 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
   },
   payButton: {
-    marginBottom: 12,
+    marginBottom: 18,
+    marginTop: 8,
+    borderRadius: 8,
   },
   cancelButton: {
-    marginBottom: 16,
+    marginBottom: 24,
+    borderRadius: 8,
   },
   error: {
     fontSize: 16,

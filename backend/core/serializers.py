@@ -10,10 +10,20 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model"""
+    qr_code_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name']
-        read_only_fields = ['id']
+        fields = ['id', 'email', 'first_name', 'last_name', 'qr_token', 'qr_code', 'qr_code_url', 'is_in', 'check_in_count']
+        read_only_fields = ['id', 'qr_token', 'qr_code', 'is_in', 'check_in_count']
+    
+    def get_qr_code_url(self, obj):
+        """Get full URL for QR code image"""
+        if obj.qr_code:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.qr_code.url)
+        return None
 
 
 class BookingConfigurationSerializer(serializers.ModelSerializer):
@@ -151,11 +161,11 @@ class PlayerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Player
-        fields = ['id', 'booking', 'name', 'email', 'phone', 'qr_code', 
+        fields = ['id', 'booking', 'name', 'email', 'phone', 'qr_code', 'qr_token',
                       'qr_code_url', 'check_in_count', 'status', 'last_check_in', 
-                      'last_check_out', 'booking_details', 'created_at']
-        read_only_fields = ['id', 'qr_code', 'check_in_count', 'last_check_in', 
-                           'last_check_out', 'created_at']
+                      'last_check_out', 'booking_details', 'created_at', 'is_in']
+        read_only_fields = ['id', 'qr_code', 'qr_token', 'check_in_count', 'last_check_in', 
+                           'last_check_out', 'created_at', 'is_in']
 
     def get_booking_details(self, obj):
         return {
@@ -164,6 +174,8 @@ class PlayerSerializer(serializers.ModelSerializer):
             'sport': obj.booking.slot.sport.name,
             'start_time': obj.booking.slot.start_time,
             'end_time': obj.booking.slot.end_time,
+            'organizer': obj.booking.user.email,  # User who made the booking
+            'organizer_name': obj.booking.user.get_full_name() or obj.booking.user.email,
         }
 
     def get_qr_code_url(self, obj):
@@ -180,17 +192,30 @@ class BookingSerializer(serializers.ModelSerializer):
     slot_details = TimeSlotSerializer(source='slot', read_only=True)
     players = PlayerSerializer(many=True, read_only=True)
     player_count = serializers.SerializerMethodField()
+    organizer_qr_code_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = ['id', 'user', 'user_details', 'slot', 'slot_details', 
                   'players', 'player_count', 'created_at', 'updated_at', 
                   'payment_verified', 'payment_id', 'order_id', 'amount_paid',
-                  'is_cancelled', 'cancellation_reason', 'status']
-        read_only_fields = ['id', 'created_at', 'updated_at', 'payment_verified', 'status']
+                  'is_cancelled', 'cancellation_reason', 'status',
+                  'organizer_qr_token', 'organizer_qr_code', 'organizer_qr_code_url',
+                  'organizer_is_in', 'organizer_check_in_count']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'payment_verified', 'status',
+                           'organizer_qr_token', 'organizer_qr_code', 'organizer_is_in',
+                           'organizer_check_in_count']
 
     def get_player_count(self, obj):
         return obj.players.count()
+    
+    def get_organizer_qr_code_url(self, obj):
+        """Get full URL for organizer QR code image"""
+        if obj.organizer_qr_code:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.organizer_qr_code.url)
+        return None
 
     def validate_slot(self, value):
         """Validate that slot is available for booking"""

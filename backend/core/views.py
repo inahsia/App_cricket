@@ -41,23 +41,38 @@ def jwt_login(request):
     # Allow login with email or username
     identifier = request.data.get('username') or request.data.get('email')
     password = request.data.get('password')
+    
+    print(f"🔐 Login attempt - Email/Username: {identifier}, Password provided: {bool(password)}")
+    
     user = None
     if identifier and password:
         # CustomUser uses email as USERNAME_FIELD, so authenticate with email
         user = authenticate(request, email=identifier, password=password)
+        print(f"   First auth attempt (email): {'✅ Success' if user else '❌ Failed'}")
+        
         # Fallback: try as username field for backwards compatibility
         if not user:
             try:
                 user_obj = User.objects.filter(email__iexact=identifier).first()
-                if user_obj and user_obj.check_password(password):
-                    user = user_obj
-            except Exception:
-                pass
+                if user_obj:
+                    print(f"   Found user by email: {user_obj.email}")
+                    if user_obj.check_password(password):
+                        user = user_obj
+                        print(f"   Password check: ✅ Success")
+                    else:
+                        print(f"   Password check: ❌ Failed")
+                else:
+                    print(f"   No user found with email: {identifier}")
+            except Exception as e:
+                print(f"   Exception during fallback: {e}")
+    else:
+        print(f"   ❌ Missing credentials - identifier: {identifier}, password: {bool(password)}")
     
     if user:
         refresh = RefreshToken.for_user(user)
         profile = getattr(user, 'profile', None)
         user_type = profile.user_type if profile else 'customer'
+        print(f"   ✅ Login successful for {user.email}")
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
@@ -65,6 +80,8 @@ def jwt_login(request):
             'user_type': user_type,
             'is_staff': user.is_staff
         })
+    
+    print(f"   ❌ Login failed - returning 401")
     return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
@@ -233,6 +250,7 @@ class SportViewSet(viewsets.ModelViewSet):
         today = timezone.now().date()
         slots = sport.slots.filter(
             is_booked=False,
+            admin_disabled=False,
             date__gte=today
         ).order_by('date', 'start_time')
         serializer = TimeSlotSerializer(slots, many=True, context={'request': request})
@@ -254,6 +272,10 @@ class SlotViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter slots based on query parameters"""
         queryset = TimeSlot.objects.all()
+        
+        # Hide admin-disabled slots from non-admin users
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(admin_disabled=False)
 
         # Filter by sport
         sport_id = self.request.query_params.get('sport', None)
@@ -269,7 +291,7 @@ class SlotViewSet(viewsets.ModelViewSet):
         available = self.request.query_params.get('available', None)
         if available and available.lower() == 'true':
             today = timezone.now().date()
-            queryset = queryset.filter(is_booked=False, date__gte=today)
+            queryset = queryset.filter(is_booked=False, admin_disabled=False, date__gte=today)
         
         # Enhanced logging for debugging
         total_slots = TimeSlot.objects.count()
@@ -737,13 +759,16 @@ class BookingViewSet(viewsets.ModelViewSet):
                 if user_created:
                     user.set_password('redball')
                     user.save()
+                    print(f"✅ Created new user account: {email} (password: redball)")
                     
                     # Set user profile as player type
                     profile, _ = UserProfile.objects.get_or_create(user=user)
                     profile.user_type = 'player'
                     profile.save()
+                else:
+                    print(f"ℹ️  Using existing user account: {email}")
                 
-                # Create player
+                # Create player (this triggers the signal for QR and email)
                 player = Player.objects.create(
                     booking=booking,
                     name=name,
@@ -751,6 +776,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                     phone=phone,
                     user=user
                 )
+                print(f"✅ Created player record for {name} ({email})")
                 created_players.append(player)
         
         # Return created players
@@ -765,6 +791,109 @@ class BookingViewSet(viewsets.ModelViewSet):
             'message': f'Successfully added {len(created_players)} players',
             'players': response_serializer.data
         }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['post'])
+    def scan_organizer_qr(self, request):
+        """Scan organizer QR code for check-in/out"""
+        from django.core import signing
+        from core.models import OrganizerCheckInLog
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        token = request.data.get('token')
+        logger.info(f"[ORGANIZER QR] Received token: {token[:50]}..." if token and len(token) > 50 else f"[ORGANIZER QR] Received token: {token}")
+
+        if not token:
+            logger.error("[ORGANIZER QR] No token provided")
+            return Response({'error': 'QR token required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 1: Try to decode and verify the token signature FIRST
+        try:
+            logger.info("[ORGANIZER QR] Attempting to decode token...")
+            data = signing.loads(token, salt='organizer-qr-token')
+            logger.info(f"[ORGANIZER QR] Token decoded successfully: {data}")
+        except signing.BadSignature as e:
+            logger.error(f"[ORGANIZER QR] Bad signature: {str(e)}")
+            return Response({'error': 'Invalid QR token - signature verification failed'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"[ORGANIZER QR] Unexpected error during signature verification: {str(e)}", exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Step 2: Validate booking and all other checks
+        booking_id = data.get('booking_id')
+        slot_date = data.get('slot_date')
+        logger.info(f"[ORGANIZER QR] Booking ID: {booking_id}, Slot Date: {slot_date}")
+
+        try:
+            booking = Booking.objects.get(id=booking_id)
+        except Booking.DoesNotExist:
+            logger.error(f"[ORGANIZER QR] Booking not found: {booking_id}")
+            return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        logger.info(f"[ORGANIZER QR] Booking found: {booking.id}, Slot Date: {booking.slot.date}, Check-in Count: {booking.organizer_check_in_count}")
+
+        today = timezone.now().date()
+        logger.info(f"[ORGANIZER QR] Today's date: {today}, Booking slot date: {booking.slot.date}, Token slot date: {slot_date}")
+
+        if str(booking.slot.date) != slot_date or booking.slot.date != today:
+            logger.error(f"[ORGANIZER QR] Date mismatch - Today: {today}, Booking: {booking.slot.date}, Token: {slot_date}")
+            return Response(
+                {'error': 'This QR code is only valid on the booking date'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if booking.organizer_check_in_count >= 2:
+            logger.error(f"[ORGANIZER QR] Max scans reached: {booking.organizer_check_in_count}")
+            return Response(
+                {'error': 'Organizer QR code already used (max 2 scans)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Step 3: Only now, after all checks, update state
+        if booking.organizer_check_in_count == 0:
+            # First scan - Check IN
+            booking.organizer_check_in_count = 1
+            booking.organizer_is_in = True
+            action = 'IN'
+            message = f'Organizer checked in for {booking.slot.sport.name}'
+            logger.info(f"[ORGANIZER QR] First scan - CHECK IN")
+        elif booking.organizer_check_in_count == 1:
+            # Second scan - Check OUT
+            booking.organizer_check_in_count = 2
+            booking.organizer_is_in = False
+            action = 'OUT'
+            message = f'Organizer checked out from {booking.slot.sport.name}'
+            logger.info(f"[ORGANIZER QR] Second scan - CHECK OUT")
+        else:
+            logger.error(f"[ORGANIZER QR] Invalid state: {booking.organizer_check_in_count}")
+            return Response(
+                {'error': 'Invalid check-in state'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking.save()
+        logger.info(f"[ORGANIZER QR] Booking saved - Count: {booking.organizer_check_in_count}, Is In: {booking.organizer_is_in}")
+
+        # Create log entry
+        OrganizerCheckInLog.objects.create(booking=booking, user=booking.user, action=action)
+        logger.info(f"[ORGANIZER QR] Log entry created")
+
+        return Response({
+            'message': message,
+            'action': action,
+            'booking': {
+                'id': booking.id,
+                'sport': booking.slot.sport.name,
+                'user': booking.user.id,
+                'user_email': booking.user.email,
+                'organizer_is_in': booking.organizer_is_in,
+                'organizer_check_in_count': booking.organizer_check_in_count,
+                'slot': {
+                    'sport': {'name': booking.slot.sport.name}
+                }
+            }
+        })
 
 
 class PlayerViewSet(viewsets.ModelViewSet):
@@ -847,7 +976,7 @@ class PlayerViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def scan_qr(self, request):
-        """Scan QR code for check-in/out"""
+        """Scan QR code for check-in/out with expiry validation"""
         serializer = QRCodeScanSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -855,19 +984,34 @@ class PlayerViewSet(viewsets.ModelViewSet):
         token = serializer.validated_data.get('token')
         qr_data = serializer.validated_data.get('qr_data')
         player_id = None
-        booking_date = None
+        token_date = None
+        
         if token:
-            # Decode signed token
+            # Decode signed token with expiry validation
             from django.core import signing
+            from dateutil import parser
             try:
                 data = signing.loads(token, salt='player-qr-token')
                 player_id = data.get('player_id')
-                # We still validate booking date from DB below
+                token_date = data.get('date')
+                token_exp = data.get('exp')
+                
+                # Validate token hasn't expired
+                if token_exp:
+                    exp_time = parser.isoparse(token_exp)
+                    if timezone.now() > exp_time:
+                        return Response(
+                            {'error': 'QR code has expired. Please contact support.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
             except signing.BadSignature:
-                return Response({'error': 'Invalid QR token'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Invalid or tampered QR token'}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({'error': f'QR token error: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         elif qr_data:
             player_id = qr_data.get('player_id')
-            booking_date = qr_data.get('date')
+            token_date = qr_data.get('date')
         else:
             return Response({'error': 'No QR data or token provided'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -875,21 +1019,24 @@ class PlayerViewSet(viewsets.ModelViewSet):
             player = Player.objects.get(id=player_id)
         except Player.DoesNotExist:
             return Response(
-                {'error': 'Invalid QR code'},
+                {'error': 'Invalid QR code - player not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
         
         # Check if booking date matches today
-        today = str(timezone.now().date())
-        booking_date_db = str(player.booking.slot.date)
-        if booking_date and booking_date != today:
+        today = timezone.now().date()
+        booking_date = player.booking.slot.date
+        
+        if booking_date != today:
             return Response(
-                {'error': f'This QR code is valid only for {booking_date}'},
+                {'error': f'This QR code is only valid on {booking_date}. Today is {today}.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if not booking_date and booking_date_db != today:
+        
+        # Validate token date matches booking date
+        if token_date and str(booking_date) != token_date:
             return Response(
-                {'error': f'This QR code is valid only for {booking_date_db}'},
+                {'error': 'QR code date mismatch. This may be an old or invalid code.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -978,12 +1125,15 @@ class PlayerViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def me(self, request):
-        """Return the current player's own record with booking and QR details"""
+        """Return the current player's own records with booking and QR details"""
         user = request.user
-        player = Player.objects.filter(user=user).first()
-        if not player:
-            return Response({'error': 'Player profile not found'}, status=status.HTTP_404_NOT_FOUND)
-        return Response(PlayerSerializer(player, context={'request': request}).data)
+        players = Player.objects.filter(user=user).select_related('booking__slot__sport')
+        if not players.exists():
+            return Response({'error': 'No player profiles found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Return all player records (multiple bookings)
+        serializer = PlayerSerializer(players, many=True, context={'request': request})
+        return Response(serializer.data)
 
 
 
@@ -1018,13 +1168,86 @@ def dashboard_stats(request):
         ]),
         'total_players': Player.objects.filter(booking__payment_verified=True, booking__is_cancelled=False).count(),
         'checked_in_today': Player.objects.filter(last_check_in__date=today, booking__payment_verified=True, booking__is_cancelled=False).count(),
-        'available_slots': TimeSlot.objects.filter(is_booked=False, date__gte=today).count(),
+        'available_slots': TimeSlot.objects.filter(is_booked=False, admin_disabled=False, date__gte=today).count(),
         'sports_count': Sport.objects.filter(is_active=True).count(),
         'slots_count': TimeSlot.objects.filter(date__gte=today).count(),
         'recent_logs': log_data,
     }
     
     return Response(stats)
+
+
+class UserViewSet(viewsets.ViewSet):
+    """ViewSet for User QR code and check-in operations"""
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        """Get current user's info including QR code"""
+        serializer = UserSerializer(request.user, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'])
+    def scan_qr(self, request):
+        """Scan user QR code for check-in/out"""
+        from django.core import signing
+        from .models import UserCheckInLog
+        
+        token = request.data.get('token')
+        if not token:
+            return Response({'error': 'QR token required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Decode token
+            data = signing.loads(token, salt='user-qr-token')
+            user_id = data.get('user_id')
+            
+            # Get user
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user = User.objects.get(id=user_id)
+            
+            # Toggle check-in status
+            if user.check_in_count == 0 or user.check_in_count == 2:
+                # Check in
+                user.check_in_count = 1
+                user.is_in = True
+                action = 'IN'
+                message = f'{user.email} checked in successfully'
+            elif user.check_in_count == 1:
+                # Check out
+                user.check_in_count = 2
+                user.is_in = False
+                action = 'OUT'
+                message = f'{user.email} checked out successfully'
+            else:
+                return Response(
+                    {'error': 'Invalid check-in state'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            user.save()
+            
+            # Create log entry
+            UserCheckInLog.objects.create(user=user, action=action)
+            
+            return Response({
+                'message': message,
+                'action': action,
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'is_in': user.is_in,
+                    'check_in_count': user.check_in_count
+                }
+            })
+            
+        except signing.BadSignature:
+            return Response({'error': 'Invalid QR token'}, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class BookingConfigurationViewSet(viewsets.ModelViewSet):
@@ -1195,4 +1418,60 @@ class BlackoutDateViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_razorpay_order(request):
+    """Create a Razorpay order and return order details"""
+    serializer = PaymentOrderSerializer(data=request.data)
+    if serializer.is_valid():
+        amount = int(float(serializer.validated_data['amount']) * 100)  # Razorpay expects paise
+        booking_id = serializer.validated_data['booking_id']
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        order_data = {
+            'amount': amount,
+            'currency': 'INR',
+            'payment_capture': 1,
+            'notes': {'booking_id': str(booking_id)}
+        }
+        order = client.order.create(data=order_data)
+        return Response({
+            'order_id': order['id'],
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'amount': amount,
+            'currency': 'INR',
+            'booking_id': booking_id
+        })
+    return Response(serializer.errors, status=400)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_razorpay_payment(request):
+    """Verify Razorpay payment signature and update booking/payment status"""
+    serializer = PaymentVerificationSerializer(data=request.data)
+    if serializer.is_valid():
+        order_id = serializer.validated_data['razorpay_order_id']
+        payment_id = serializer.validated_data['razorpay_payment_id']
+        signature = serializer.validated_data['razorpay_signature']
+        booking_id = serializer.validated_data['booking_id']
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        try:
+            client.utility.verify_payment_signature({
+                'razorpay_order_id': order_id,
+                'razorpay_payment_id': payment_id,
+                'razorpay_signature': signature
+            })
+        except razorpay.errors.SignatureVerificationError:
+            return Response({'error': 'Payment verification failed'}, status=400)
+        # Mark booking as paid (update your Booking model as needed)
+        from .models import Booking
+        try:
+            booking = Booking.objects.get(id=booking_id)
+            booking.payment_verified = True
+            booking.save()
+        except Booking.DoesNotExist:
+            return Response({'error': 'Booking not found'}, status=404)
+        return Response({'message': 'Payment verified and booking updated'})
+    return Response(serializer.errors, status=400)
 

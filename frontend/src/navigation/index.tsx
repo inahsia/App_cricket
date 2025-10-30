@@ -21,6 +21,7 @@ import ChangePasswordScreen from '../screens/user/ChangePasswordScreen';
 
 // Player Screens
 import PlayerDashboardScreen from '../screens/player/PlayerDashboardScreen';
+import PlayerBookingsScreen from '../screens/player/PlayerBookingsScreen';
 
 // Admin Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -28,6 +29,10 @@ import ManageSportsScreen from '../screens/admin/ManageSportsScreen';
 import ManageSlotsScreenEnhanced from '../screens/admin/ManageSlotsScreen_Enhanced';
 import QRScannerScreen from '../screens/admin/QRScannerScreen';
 import AllBookingsScreen from '../screens/admin/AllBookingsScreen';
+import AdminProfileScreen from '../screens/admin/AdminProfileScreen';
+
+// Player Profile Screen
+import PlayerProfileScreen from '../screens/player/PlayerProfileScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -60,6 +65,8 @@ const PlayerTabNavigator = () => {
         headerTintColor: '#FFFFFF',
       }}>
       <Tab.Screen name="Dashboard" component={PlayerDashboardScreen} />
+      <Tab.Screen name="My Bookings" component={PlayerBookingsScreen} />
+      <Tab.Screen name="Profile" component={PlayerProfileScreen} />
     </Tab.Navigator>
   );
 };
@@ -79,6 +86,7 @@ const AdminTabNavigator = () => {
       <Tab.Screen name="Slots" component={ManageSlotsScreenEnhanced} />
       <Tab.Screen name="Bookings" component={AllBookingsScreen} />
       <Tab.Screen name="Scanner" component={QRScannerScreen} />
+      <Tab.Screen name="Profile" component={AdminProfileScreen} />
     </Tab.Navigator>
   );
 };

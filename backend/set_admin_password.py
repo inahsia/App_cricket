@@ -13,10 +13,10 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # Old admin credentials
-old_email = 'admin@redball.com'
+old_email = 'admin@example.com'
 
 # New admin credentials (change these as needed)
-new_email = 'indaish2716@gmail.com'
+new_email = 'aish2716@gmail.com'
 new_password = 'admin123'
 
 print("=" * 60)

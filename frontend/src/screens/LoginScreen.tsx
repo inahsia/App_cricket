@@ -82,6 +82,9 @@ const LoginScreen = () => {
       console.log('User role retrieved:', role);
 
       console.log('Navigating to dashboard...');
+      // Add delay to ensure AsyncStorage is fully synced
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       if (role === 'admin') {
         navigation.reset({index: 0, routes: [{name: 'AdminTab'}]});
       } else if (role === 'player') {

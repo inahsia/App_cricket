@@ -79,9 +79,7 @@ const AdminDashboardScreen = () => {
         <Text style={styles.actionItem}>📊 View All Bookings</Text>
         <Text style={styles.actionItem}>🏏 Manage Sports</Text>
         <Text style={styles.actionItem}>⏰ Manage Time Slots</Text>
-        <Text style={styles.actionItem}>
-          📷 QR Scanner (Coming Soon)
-        </Text>
+        <Text style={styles.actionItem}>📷 QR Scanner</Text>
       </Card>
     </ScrollView>
   );

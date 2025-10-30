@@ -6,6 +6,7 @@ from pathlib import Path
 from decouple import config
 import os
 import warnings
+import dj_database_url
 
 # Suppress pkg_resources deprecation warning
 warnings.filterwarnings('ignore', category=UserWarning, module='pkg_resources')
@@ -17,7 +18,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-production')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = ['*']
+# Allowed hosts - add your Render domain and Android emulator
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,10.0.2.2,.onrender.com').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -39,6 +41,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add WhiteNoise for static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -68,17 +71,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'redball_academy.wsgi.application'
 
-# Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DATABASE_NAME', default='redball_cricket_db'),
-        'USER': config('DATABASE_USER', default='postgres'),
-        'PASSWORD': config('DATABASE_PASSWORD', default='postgres'),
-        'HOST': config('DATABASE_HOST', default='localhost'),
-        'PORT': config('DATABASE_PORT', default='5432'),
+# Database - supports both local and Render (DATABASE_URL)
+if config('DATABASE_URL', default=None):
+    # Use DATABASE_URL for Render deployment
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=config('DATABASE_URL'),
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    # Use SQLite for local development (easier for testing)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -105,6 +115,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# WhiteNoise configuration for serving static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files
 MEDIA_URL = '/media/'

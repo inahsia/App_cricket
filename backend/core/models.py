@@ -60,6 +60,10 @@ class CustomUser(AbstractUser):
     """
     username = None  # Remove username field
     email = models.EmailField(_('email address'), unique=True)
+    qr_token = models.CharField(max_length=512, blank=True, null=True)
+    qr_code = models.ImageField(upload_to='qr_codes/users/', blank=True, null=True)
+    is_in = models.BooleanField(default=False)  # Track if user is checked in
+    check_in_count = models.IntegerField(default=0)  # 0=registered, 1=in, 2=out
     
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []  # Email is already the USERNAME_FIELD
@@ -72,6 +76,42 @@ class CustomUser(AbstractUser):
     
     def __str__(self):
         return self.email
+    
+    def generate_qr_code(self):
+        """Generate QR code and token for user"""
+        from django.core import signing
+        
+        # Create token with user info
+        payload = {
+            'user_id': self.id,
+            'email': self.email,
+            'ts': timezone.now().isoformat()
+        }
+        token = signing.dumps(payload, salt='user-qr-token')
+        self.qr_token = token
+        
+        # Generate QR code image
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(token)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Save to BytesIO
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        # Save to ImageField
+        filename = f'user_{self.id}_qr.png'
+        self.qr_code.save(filename, File(buffer), save=False)
+        
+        return token
 class UserProfile(models.Model):
     USER_TYPE_CHOICES = (
         ('admin', 'Admin'),
@@ -94,6 +134,15 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
         # Only save profile if it exists
         if hasattr(instance, 'profile'):
             instance.profile.save()
+
+# Automatically generate QR code for users
+@receiver(post_save, sender=CustomUser)
+def ensure_user_qr_code(sender, instance, created, **kwargs):
+    """Ensure every user has a QR code and token"""
+    if not instance.qr_token:
+        instance.generate_qr_code()
+        instance.save()
+
 from django.core.validators import MinValueValidator
 from django.utils import timezone
 import qrcode
@@ -291,6 +340,11 @@ class Booking(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     payment_verified = models.BooleanField(default=False)
     qr_token = models.CharField(max_length=512, blank=True, null=True)
+    # Organizer (User) QR fields for this specific booking
+    organizer_qr_token = models.CharField(max_length=512, blank=True, null=True)
+    organizer_qr_code = models.ImageField(upload_to='qr_codes/organizers/', blank=True, null=True)
+    organizer_is_in = models.BooleanField(default=False)  # Organizer check-in status for THIS booking
+    organizer_check_in_count = models.IntegerField(default=0)  # 0=registered, 1=in, 2=out
     payment_id = models.CharField(max_length=255, blank=True, null=True)
     order_id = models.CharField(max_length=255, blank=True, null=True)
     amount_paid = models.DecimalField(
@@ -325,6 +379,44 @@ class Booking(models.Model):
     def __str__(self):
         return f"Booking #{self.id} - {self.user.email} - {self.slot}"
 
+    def generate_organizer_qr_code(self):
+        """Generate QR code for the organizer (user) for this specific booking"""
+        from django.core import signing
+        
+        payload = {
+            'booking_id': self.id,
+            'user_id': self.user.id,
+            'type': 'organizer',
+            'slot_date': str(self.slot.date),
+            'sport': self.slot.sport.name if self.slot and self.slot.sport else 'Sport',
+            'ts': timezone.now().isoformat()
+        }
+        token = signing.dumps(payload, salt='organizer-qr-token')
+        self.organizer_qr_token = token
+        
+        # Generate QR code image
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(token)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Save to BytesIO
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        # Save to ImageField
+        filename = f'organizer_booking_{self.id}_qr.png'
+        self.organizer_qr_code.save(filename, File(buffer), save=False)
+        
+        return token
+
     def cancel_booking(self, reason=""):
         """Cancel the booking"""
         self.is_cancelled = True
@@ -344,16 +436,17 @@ class Player(models.Model):
     name = models.CharField(max_length=100)
     email = models.EmailField()
     phone = models.CharField(max_length=15, blank=True, null=True)
-    user = models.OneToOneField(
+    user = models.ForeignKey(
         'CustomUser', 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
-        related_name='player_profile'
+        related_name='player_profiles'  # Changed to plural
     )
     qr_code = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
     qr_token = models.CharField(max_length=512, blank=True, null=True)
     check_in_count = models.IntegerField(default=0)
+    is_in = models.BooleanField(default=False)  # Track if player is currently checked in
     last_check_in = models.DateTimeField(null=True, blank=True)
     last_check_out = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -407,13 +500,17 @@ class Player(models.Model):
         return booking_date == today and self.check_in_count < 2
 
     def check_in(self):
-        """Mark player as checked in"""
+        """Mark player as checked in/out"""
         if self.can_check_in():
             self.check_in_count += 1
             if self.check_in_count == 1:
+                # First scan - Check IN
                 self.last_check_in = timezone.now()
+                self.is_in = True
             elif self.check_in_count == 2:
+                # Second scan - Check OUT
                 self.last_check_out = timezone.now()
+                self.is_in = False
             self.save()
             return True
         return False
@@ -421,7 +518,7 @@ class Player(models.Model):
     def get_status(self):
         """Get current check-in status"""
         if self.check_in_count == 0:
-            return "Not Checked In"
+            return "Registered"
         elif self.check_in_count == 1:
             return "Checked In"
         else:
@@ -449,6 +546,53 @@ class CheckInLog(models.Model):
 
     def __str__(self):
         return f"{self.player.name} - {self.action} at {self.timestamp}"
+
+
+class UserCheckInLog(models.Model):
+    """Log of user check-ins and check-outs"""
+    ACTION_CHOICES = (
+        ('IN', 'Check In'),
+        ('OUT', 'Check Out'),
+    )
+    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='checkin_logs')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=3, choices=ACTION_CHOICES)
+    
+    class Meta:
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.action} at {self.timestamp}"
+
+
+class OrganizerCheckInLog(models.Model):
+    """Log of organizer check-ins and check-outs for specific bookings"""
+    ACTION_CHOICES = (
+        ('IN', 'Check In'),
+        ('OUT', 'Check Out'),
+    )
+    booking = models.ForeignKey('Booking', on_delete=models.CASCADE, related_name='organizer_checkin_logs')
+    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=3, choices=ACTION_CHOICES)
+    
+    class Meta:
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"Booking #{self.booking.id} Organizer - {self.action} at {self.timestamp}"
+
+
+# Automatically generate organizer QR when booking is confirmed
+@receiver(post_save, sender=Booking)
+def generate_organizer_qr_on_booking_confirm(sender, instance: Booking, created, **kwargs):
+    """Generate organizer QR code when booking is payment verified"""
+    if instance.payment_verified and not instance.organizer_qr_token:
+        try:
+            instance.generate_organizer_qr_code()
+            instance.save(update_fields=['organizer_qr_token', 'organizer_qr_code'])
+        except Exception as e:
+            print(f"Failed to generate organizer QR for booking {instance.id}: {e}")
 
 
 # Automatically handle Player creation side-effects
@@ -486,11 +630,12 @@ def ensure_player_account_qr_and_email(sender, instance: Player, created, **kwar
         player.save(update_fields=['user'])
 
     # 2) Generate QR code if missing
-    if not player.qr_code:
+    if not player.qr_token:
         try:
             player.generate_qr_code()
-            player.save(update_fields=['qr_code'])
-        except Exception:
+            player.save(update_fields=['qr_token', 'qr_code'])
+        except Exception as e:
+            print(f"Failed to generate QR for player {player.id}: {e}")
             pass
 
     # 3) Email credentials (best-effort). Prefer Celery if available
@@ -525,3 +670,16 @@ def ensure_player_account_qr_and_email(sender, instance: Player, created, **kwar
             )
     except Exception:
         pass
+
+
+# Automatically generate QR code for new users
+@receiver(post_save, sender=CustomUser)
+def ensure_user_qr_code(sender, instance: CustomUser, created, **kwargs):
+    """Generate QR code for newly created users"""
+    if created and not instance.qr_token:
+        try:
+            instance.generate_qr_code()
+            instance.save(update_fields=['qr_token', 'qr_code'])
+        except Exception as e:
+            print(f"Failed to generate QR for user {instance.id}: {e}")
+            pass

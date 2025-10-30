@@ -11,10 +11,12 @@ import {
   Dimensions,
   TextInput,
   Modal,
+  Clipboard,
 } from 'react-native';
-import axios from 'axios';
 import QRCode from 'react-native-qrcode-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import ApiService from '../../services/api.service';
 import Colors from '../../config/colors';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
@@ -28,6 +30,7 @@ interface PlayerInfo {
   email: string;
   booking: number;
   qr_code: string;
+  qr_token: string;
   qr_code_url?: string;
   is_in: boolean;
   booking_details?: {
@@ -36,11 +39,14 @@ interface PlayerInfo {
     sport: string;
     start_time: string;
     end_time: string;
+    organizer: string;
+    organizer_name: string;
   };
 }
 
 const PlayerDashboardScreen: React.FC = () => {
-  const [playerInfo, setPlayerInfo] = useState<PlayerInfo | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<PlayerInfo[]>([]); // Array now
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerInfo | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [useImageQR, setUseImageQR] = useState<boolean>(true);
@@ -51,10 +57,29 @@ const PlayerDashboardScreen: React.FC = () => {
     loadPlayerData();
   }, []);
 
+  useEffect(() => {
+    // Auto-select first player if available
+    if (playerInfo.length > 0 && !selectedPlayer) {
+      setSelectedPlayer(playerInfo[0]);
+    }
+  }, [playerInfo]);
+
   const getAuthToken = async (): Promise<string | null> => {
     try {
-      const token = await AsyncStorage.getItem('authToken');
-      return token;
+      // Try multiple times with delays in case AsyncStorage is syncing
+      for (let i = 0; i < 3; i++) {
+        const token = await AsyncStorage.getItem('@redball_auth_token'); // Use correct key!
+        if (token) {
+          console.log('Auth token found on attempt', i + 1);
+          return token;
+        }
+        if (i < 2) {
+          console.log('No token yet, waiting... (attempt', i + 1, ')');
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      console.log('No auth token found after 3 attempts');
+      return null;
     } catch (error) {
       console.error('Error getting auth token:', error);
       return null;
@@ -67,23 +92,28 @@ const PlayerDashboardScreen: React.FC = () => {
       const token = await getAuthToken();
       
       if (!token) {
-        Alert.alert('Error', 'Authentication token not found. Please login again.');
+        console.log('No auth token found in AsyncStorage');
+        // Don't show alert immediately - might be loading issue
+        setLoading(false);
         return;
       }
 
-      const response = await axios.get<PlayerInfo>('http://10.0.2.2:8000/api/players/me/', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      console.log('Loading player data with ApiService...');
+      const response = await ApiService.get<PlayerInfo[]>('/players/me/'); // Array response
 
-      setPlayerInfo(response.data);
+      console.log('Player data loaded:', response);
+      setPlayerInfo(response);
+      
+      // Auto-select first player
+      if (response.length > 0) {
+        setSelectedPlayer(response[0]);
+      }
     } catch (error: any) {
       console.error('Error loading player data:', error);
+      console.error('Error response:', error.response?.data);
       Alert.alert(
         'Error', 
-        error.response?.data?.error || 'Failed to load player data. Please try again.'
+        error.response?.data?.error || error.response?.data?.detail || 'Failed to load player data. Please pull down to refresh.'
       );
     } finally {
       setLoading(false);
@@ -118,6 +148,14 @@ const PlayerDashboardScreen: React.FC = () => {
 
   const handleQRFallback = (): void => {
     setUseImageQR(false);
+  };
+
+  const copyQRToken = async (): Promise<void> => {
+    const player = selectedPlayer || playerInfo[0];
+    if (player?.qr_token) {
+      await Clipboard.setString(player.qr_token);
+      Alert.alert('Copied!', 'QR token copied to clipboard');
+    }
   };
 
   const openManualInput = (): void => {
@@ -162,9 +200,11 @@ const PlayerDashboardScreen: React.FC = () => {
 
       const { message, action, player } = response.data;
       
-      // Update local player info if it's the current player
-      if (player.id === playerInfo?.id) {
-        setPlayerInfo(prevInfo => prevInfo ? { ...prevInfo, is_in: player.is_in } : null);
+      // Update local player info if it's in the array
+      if (playerInfo.some(p => p.id === player.id)) {
+        setPlayerInfo(prevInfo => 
+          prevInfo.map(p => p.id === player.id ? { ...p, is_in: player.is_in } : p)
+        );
       }
 
       Alert.alert(
@@ -190,13 +230,14 @@ const PlayerDashboardScreen: React.FC = () => {
         return;
       }
 
-      if (!playerInfo?.qr_code) {
+      const player = selectedPlayer || playerInfo[0];
+      if (!player?.qr_code) {
         Alert.alert('Error', 'QR code not found for your account');
         return;
       }
 
       // Scan own QR code to toggle status
-      await handleQRScan(playerInfo.qr_code);
+      await handleQRScan(player.qr_code);
       
     } catch (error: any) {
       console.error('Toggle status error:', error);
@@ -204,9 +245,30 @@ const PlayerDashboardScreen: React.FC = () => {
     }
   };
 
-  if (loading && !playerInfo) {
+  if (loading && playerInfo.length === 0) {
     return <Loading />;
   }
+
+  if (!loading && playerInfo.length === 0) {
+    return (
+      <View style={styles.errorContainer}>
+        <Icon name="error-outline" size={64} color={Colors.error} />
+        <Text style={styles.errorTitle}>No Player Data</Text>
+        <Text style={styles.errorText}>
+          Could not load your player information.{'\n'}
+          Pull down to refresh or check your login.
+        </Text>
+        <Button
+          title="Refresh"
+          onPress={onRefresh}
+          loading={refreshing}
+          style={styles.refreshButton}
+        />
+      </View>
+    );
+  }
+
+  const player = selectedPlayer || playerInfo[0]; // Use selected or first
 
   return (
     <ScrollView
@@ -218,9 +280,14 @@ const PlayerDashboardScreen: React.FC = () => {
       {/* Header Card */}
       <Card style={styles.headerCard}>
         <Text style={styles.welcomeText}>Welcome, Player!</Text>
-        <Text style={styles.playerName}>{playerInfo?.name || 'Player'}</Text>
-        <Text style={styles.playerEmail}>{playerInfo?.email || ''}</Text>
-        <Text style={styles.playerId}>Player ID: #{playerInfo?.id}</Text>
+        <Text style={styles.playerName}>{player?.name || 'Player'}</Text>
+        <Text style={styles.playerEmail}>{player?.email || ''}</Text>
+        <Text style={styles.playerId}>Player ID: #{player?.id}</Text>
+        {playerInfo.length > 1 && (
+          <Text style={styles.bookingsCount}>
+            {playerInfo.length} Active Bookings
+          </Text>
+        )}
       </Card>
 
       {/* Attendance Status Card */}
@@ -229,17 +296,17 @@ const PlayerDashboardScreen: React.FC = () => {
         <View style={styles.statusContainer}>
           <View style={[
             styles.statusIndicator,
-            { backgroundColor: playerInfo?.is_in ? Colors.success : Colors.error }
+            { backgroundColor: player?.is_in ? Colors.success : Colors.error }
           ]} />
           <Text style={[
             styles.statusText,
-            { color: playerInfo?.is_in ? Colors.success : Colors.error }
+            { color: player?.is_in ? Colors.success : Colors.error }
           ]}>
-            {playerInfo?.is_in ? 'CHECKED IN' : 'CHECKED OUT'}
+            {player?.is_in ? 'CHECKED IN' : 'CHECKED OUT'}
           </Text>
         </View>
         <Text style={styles.statusSubtext}>
-          {playerInfo?.is_in 
+          {player?.is_in 
             ? 'You are currently at the academy' 
             : 'You are not at the academy'
           }
@@ -247,28 +314,36 @@ const PlayerDashboardScreen: React.FC = () => {
       </Card>
 
       {/* Booking Details Card */}
-      {playerInfo?.booking_details && (
+      {player?.booking_details && (
         <Card style={styles.bookingCard}>
           <Text style={styles.sectionTitle}>Booking Details</Text>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Sport:</Text>
-            <Text style={styles.detailValue}>{playerInfo.booking_details.sport}</Text>
+            <Text style={styles.detailValue}>{player.booking_details.sport}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Date:</Text>
             <Text style={styles.detailValue}>
-              {formatDate(playerInfo.booking_details.slot_date)}
+              {formatDate(player.booking_details.slot_date)}
             </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Time:</Text>
             <Text style={styles.detailValue}>
-              {formatTime(playerInfo.booking_details.start_time)} - {formatTime(playerInfo.booking_details.end_time)}
+              {formatTime(player.booking_details.start_time)} - {formatTime(player.booking_details.end_time)}
             </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Booking ID:</Text>
-            <Text style={styles.detailValue}>#{playerInfo.booking}</Text>
+            <Text style={styles.detailValue}>#{player.booking}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Booked By:</Text>
+            <Text style={styles.detailValue}>{player.booking_details.organizer_name}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Organizer:</Text>
+            <Text style={styles.detailValue}>{player.booking_details.organizer}</Text>
           </View>
         </Card>
       )}
@@ -281,16 +356,16 @@ const PlayerDashboardScreen: React.FC = () => {
         </Text>
         
         <View style={styles.qrContainer}>
-          {useImageQR && playerInfo?.qr_code_url ? (
+          {useImageQR && player?.qr_code_url ? (
             <Image
-              source={{ uri: playerInfo.qr_code_url }}
+              source={{ uri: player.qr_code_url }}
               style={styles.qrImage}
               resizeMode="contain"
               onError={handleQRFallback}
             />
           ) : (
             <QRCode
-              value={playerInfo?.qr_code || `player_${playerInfo?.id}` || 'no-data'}
+              value={player?.qr_token || `player_${player?.id}` || 'no-data'}
               size={200}
               color="black"
               backgroundColor="white"
@@ -306,6 +381,24 @@ const PlayerDashboardScreen: React.FC = () => {
             {useImageQR ? 'Use Generated QR' : 'Use Backend QR Image'}
           </Text>
         </TouchableOpacity>
+
+        {/* QR Token Display */}
+        <View style={styles.tokenContainer}>
+          <Text style={styles.tokenLabel}>QR Token (for manual entry):</Text>
+          <TouchableOpacity 
+            style={styles.tokenBox}
+            onPress={copyQRToken}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.tokenText} numberOfLines={2}>
+              {player?.qr_token || 'No token available'}
+            </Text>
+            <Icon name="content-copy" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.tokenHint}>
+            Tap to copy • Share with admin if scanner doesn't work
+          </Text>
+        </View>
       </Card>
 
       {/* Action Buttons */}
@@ -318,10 +411,10 @@ const PlayerDashboardScreen: React.FC = () => {
         />
         
         <Button
-          title={playerInfo?.is_in ? "Toggle to Check Out" : "Toggle to Check In"}
+          title={player?.is_in ? "Toggle to Check Out" : "Toggle to Check In"}
           onPress={toggleMyStatus}
           style={[styles.actionButton, {
-            backgroundColor: playerInfo?.is_in ? Colors.error : Colors.success
+            backgroundColor: player?.is_in ? Colors.error : Colors.success
           }]}
         />
         
@@ -549,6 +642,42 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     textAlign: 'center',
   },
+  tokenContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  tokenLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: 8,
+  },
+  tokenBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  tokenText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    color: Colors.text.primary,
+    marginRight: 8,
+  },
+  tokenHint: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
   actionContainer: {
     margin: 16,
     marginTop: 0,
@@ -607,11 +736,26 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 8,
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    backgroundColor: Colors.background,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.text.primary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
   errorText: {
     fontSize: 16,
-    color: Colors.error,
+    color: Colors.text.secondary,
     textAlign: 'center',
-    marginTop: 20,
+    marginBottom: 24,
+    lineHeight: 24,
   },
   instructionsCard: {
     margin: 16,

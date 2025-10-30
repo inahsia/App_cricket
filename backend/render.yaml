@@ -1,0 +1,35 @@
+services:
+  # Backend Service
+  - type: web
+    name: redball-cricket-backend
+    env: python
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
+    startCommand: gunicorn redball_academy.wsgi:application
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: False
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: redball-cricket-db
+          property: connectionString
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+
+  # PostgreSQL Database
+  - type: pserv
+    name: redball-cricket-db
+    env: docker
+    plan: free
+    ipAllowList: []

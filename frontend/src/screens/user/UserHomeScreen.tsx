@@ -89,12 +89,13 @@ const UserHomeScreen = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.welcome}>Welcome back!</Text>
-        <Text style={styles.name}>{user?.email || user?.first_name || 'User'}</Text>
+        <Text style={styles.welcome}>🏏 Welcome back!</Text>
+        <Text style={styles.name}>{user?.first_name || user?.email?.split('@')[0] || 'Champion'} 🎾</Text>
+        <Text style={styles.tagline}>Ready to play today?</Text>
       </View>
 
       <View style={styles.quickActions}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <Text style={styles.sectionTitle}>⚡ Quick Actions</Text>
 
         <Card style={styles.actionCard}>
           <TouchableOpacity
@@ -148,7 +149,7 @@ const UserHomeScreen = () => {
       )}
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Logout</Text>
+        <Text style={styles.logoutText}>🚪 Logout</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -172,6 +173,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: Colors.text.light,
+  },
+  tagline: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   quickActions: {
     padding: 16,

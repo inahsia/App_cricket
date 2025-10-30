@@ -9,6 +9,11 @@ export interface User {
   first_name: string;
   last_name: string;
   is_staff?: boolean;
+  qr_token?: string;
+  qr_code?: string;
+  qr_code_url?: string;
+  is_in?: boolean;
+  check_in_count?: number;
 }
 
 export interface Sport {
@@ -34,6 +39,7 @@ export interface TimeSlot {
   end_time: string;
   price: string;
   is_booked: boolean;
+  admin_disabled: boolean;
   max_players: number;
   is_available: boolean;
   created_at: string;
@@ -78,6 +84,8 @@ export interface Booking {
   amount_paid?: string;
   is_cancelled: boolean;
   cancellation_reason?: string;
+  organizer_check_in_count?: number;
+  organizer_status?: string;
 }
 
 export interface PaymentOrder {

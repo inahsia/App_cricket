@@ -168,6 +168,15 @@ const AllBookingsScreen = () => {
           <Text style={styles.label}>Amount:</Text>
           <Text style={styles.value}>{formatCurrency(item.amount_paid || '0')}</Text>
         </View>
+
+        <View style={styles.row}>
+          <Text style={styles.label}>Organizer Check-In Count:</Text>
+          <Text style={styles.value}>{item.organizer_check_in_count ?? 'N/A'}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Organizer Status:</Text>
+          <Text style={styles.value}>{item.organizer_status ?? (item.organizer_check_in_count === 0 ? 'Registered' : item.organizer_check_in_count === 1 ? 'Checked In' : item.organizer_check_in_count === 2 ? 'Checked Out' : 'N/A')}</Text>
+        </View>
       </View>
 
       {!item.is_cancelled && (

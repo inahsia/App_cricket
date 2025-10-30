@@ -182,8 +182,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   slotCard: {
-    margin: 16,
-    padding: 16,
+    margin: 20,
+    padding: 18,
+    borderRadius: 12,
+    elevation: 2,
   },
   sportName: {
     fontSize: 20,
@@ -207,7 +209,8 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   section: {
-    padding: 16,
+    padding: 18,
+    marginBottom: 18,
   },
   sectionTitle: {
     fontSize: 18,
@@ -221,10 +224,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   playerSection: {
-    marginBottom: 16,
-    padding: 16,
+    marginBottom: 20,
+    padding: 18,
     backgroundColor: Colors.surface,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -238,10 +241,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,
-    padding: 12,
+    padding: 14,
     fontSize: 16,
     backgroundColor: Colors.background,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   emailInput: {
     marginBottom: 12,
@@ -251,21 +254,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   addButton: {
-    marginTop: 8,
+    marginTop: 12,
+    marginBottom: 8,
   },
   summary: {
-    padding: 16,
+    padding: 18,
+    marginTop: 10,
+    marginBottom: 18,
+    borderRadius: 10,
+    backgroundColor: Colors.surface,
   },
   summaryTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.text.primary,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   summaryLabel: {
     fontSize: 16,
@@ -276,8 +284,8 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
   },
   totalRow: {
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
@@ -292,7 +300,8 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   bookButton: {
-    margin: 16,
+    margin: 20,
+    borderRadius: 8,
   },
   error: {
     fontSize: 16,

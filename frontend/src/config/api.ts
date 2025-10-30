@@ -3,7 +3,7 @@ import {Platform} from 'react-native';
 const isDevelopment = __DEV__;
 const DEV_ANDROID_URL = 'http://10.0.2.2:8000'; // Android Emulator
 const DEV_IOS_URL = 'http://localhost:8000'; // iOS Simulator
-const PROD_URL = 'https://your-production-url.com'; // Production URL
+const PROD_URL = 'https://backend-render-1-xf8i.onrender.com'; // Production URL - Render Backend
 
 export const BASE_URL = `${
   isDevelopment
@@ -41,8 +41,8 @@ export const API_ENDPOINTS = {
   SCAN_QR: '/players/scan_qr/',
   
   // Payments
-  CREATE_PAYMENT_ORDER: '/payments/create-order/',
-  VERIFY_PAYMENT: '/payments/verify/',
+  CREATE_PAYMENT_ORDER: '/payment/create-order/',
+  VERIFY_PAYMENT: '/payment/verify/',
   
   // Dashboard
   DASHBOARD_STATS: '/dashboard/stats/',

@@ -11,6 +11,7 @@ router.register(r'sports', views.SportViewSet, basename='sport')
 router.register(r'slots', views.SlotViewSet, basename='timeslot')
 router.register(r'bookings', views.BookingViewSet, basename='booking')
 router.register(r'players', views.PlayerViewSet, basename='player')
+router.register(r'users', views.UserViewSet, basename='user')
 router.register(r'booking-configurations', views.BookingConfigurationViewSet, basename='booking-configuration')
 router.register(r'break-times', views.BreakTimeViewSet, basename='break-time')
 router.register(r'blackout-dates', views.BlackoutDateViewSet, basename='blackout-date')
@@ -30,6 +31,8 @@ urlpatterns = [
     path('auth/password-reset-confirm/', views.password_reset_confirm, name='password_reset_confirm'),
     
     # Payment endpoints
+    path('payment/create-order/', views.create_razorpay_order, name='create_razorpay_order'),
+    path('payment/verify/', views.verify_razorpay_payment, name='verify_razorpay_payment'),
     
     # Dashboard
     path('dashboard/stats/', views.dashboard_stats, name='dashboard_stats'),

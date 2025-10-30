@@ -59,11 +59,21 @@ class TimeSlotAdmin(admin.ModelAdmin):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'slot', 'payment_verified', 'is_cancelled', 'created_at']
-    list_filter = ['payment_verified', 'is_cancelled', 'created_at']
+    list_display = ['id', 'user', 'slot', 'payment_verified', 'is_cancelled', 'organizer_check_in_count', 'get_organizer_status', 'created_at']
+    list_filter = ['payment_verified', 'is_cancelled', 'organizer_check_in_count', 'created_at']
     search_fields = ['user__email', 'payment_id', 'order_id']
     readonly_fields = ['created_at', 'updated_at']
     raw_id_fields = ['user', 'slot']
+    
+    def get_organizer_status(self, obj):
+        """Display organizer check-in status"""
+        if obj.organizer_check_in_count == 0:
+            return "Registered"
+        elif obj.organizer_check_in_count == 1:
+            return "Checked In"
+        else:
+            return "Checked Out"
+    get_organizer_status.short_description = "Organizer Status"
 
 
 @admin.register(Player)
