@@ -748,35 +748,15 @@ class BookingViewSet(viewsets.ModelViewSet):
                         'error': f'Player with email {email} already exists in this booking'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Create or get user with email as username and "redball" as password
-                user, user_created = CustomUser.objects.get_or_create(
-                    email=email,
-                    defaults={
-                        'first_name': name,
-                    }
-                )
-                
-                if user_created:
-                    user.set_password('redball')
-                    user.save()
-                    print(f"✅ Created new user account: {email} (password: redball)")
-                    
-                    # Set user profile as player type
-                    profile, _ = UserProfile.objects.get_or_create(user=user)
-                    profile.user_type = 'player'
-                    profile.save()
-                else:
-                    print(f"ℹ️  Using existing user account: {email}")
-                
-                # Create player (this triggers the signal for QR and email)
+                # Create player WITHOUT user (let signal handle account creation, QR, and email)
                 player = Player.objects.create(
                     booking=booking,
                     name=name,
                     email=email,
                     phone=phone,
-                    user=user
+                    user=None  # Signal will create/attach user automatically
                 )
-                print(f"✅ Created player record for {name} ({email})")
+                print(f"✅ Created player record for {name} ({email}) - signal will handle account creation")
                 created_players.append(player)
         
         # Return created players
@@ -1421,15 +1401,21 @@ class BlackoutDateViewSet(viewsets.ModelViewSet):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
-@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_razorpay_order(request):
     """Create a Razorpay order and return order details"""
-    serializer = PaymentOrderSerializer(data=request.data)
-    if serializer.is_valid():
+    try:
+        serializer = PaymentOrderSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        
         amount = int(float(serializer.validated_data['amount']) * 100)  # Razorpay expects paise
         booking_id = serializer.validated_data['booking_id']
+        
+        # Check if Razorpay keys are set
+        if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            return Response({'error': 'Razorpay credentials not configured'}, status=500)
+        
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
         order_data = {
             'amount': amount,
@@ -1445,7 +1431,11 @@ def create_razorpay_order(request):
             'currency': 'INR',
             'booking_id': booking_id
         })
-    return Response(serializer.errors, status=400)
+    except Exception as e:
+        print(f"Payment order creation error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
